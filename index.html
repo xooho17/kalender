@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kalender</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main id="app" class="app-shell">
+      <section id="login-view" class="login-view" aria-labelledby="login-title">
+        <div class="login-art">
+          <div class="orbital-calendar" aria-hidden="true">
+            <div class="mini-card card-one"></div>
+            <div class="mini-card card-two"></div>
+            <div class="mini-card card-three"></div>
+          </div>
+          <div>
+            <p class="eyebrow">Shared planning</p>
+            <h1 id="login-title">Kalender</h1>
+            <p class="login-copy">
+              A focused collaborative calendar for teams, families, and anyone
+              who needs shared plans without the clutter.
+            </p>
+          </div>
+        </div>
+
+        <form id="login-form" class="login-panel">
+          <div>
+            <p class="eyebrow">Sign in</p>
+            <h2>Welcome back</h2>
+            <p>Use the account created for you in Supabase.</p>
+          </div>
+          <label>
+            Email
+            <input id="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Password
+            <input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <button class="primary-action" type="submit">Sign in</button>
+          <p id="login-error" class="form-message" role="alert"></p>
+        </form>
+      </section>
+
+      <section id="calendar-view" class="calendar-view hidden">
+        <aside class="sidebar">
+          <div class="brand-row">
+            <div class="brand-mark">K</div>
+            <div>
+              <strong>Kalender</strong>
+              <span id="user-email"></span>
+            </div>
+          </div>
+
+          <button id="new-event-btn" class="primary-action" type="button">
+            New event
+          </button>
+
+          <section class="side-section">
+            <div class="section-heading">
+              <h2>Calendars</h2>
+              <button id="new-calendar-btn" class="icon-button" type="button" title="Create calendar">
+                +
+              </button>
+            </div>
+            <div id="calendar-list" class="calendar-list"></div>
+          </section>
+
+          <section class="side-section">
+            <div class="section-heading">
+              <h2>Filters</h2>
+            </div>
+            <label class="search-box">
+              <span>Search</span>
+              <input id="event-search" type="search" placeholder="Title or description" />
+            </label>
+            <div id="category-filters" class="category-filters"></div>
+          </section>
+
+          <section class="side-section overview-section">
+            <div class="section-heading">
+              <h2>This week</h2>
+            </div>
+            <div id="weekly-overview" class="weekly-overview"></div>
+          </section>
+
+          <div class="sidebar-footer">
+            <button id="theme-toggle" class="ghost-action" type="button">Dark mode</button>
+            <button id="logout-btn" class="ghost-action" type="button">Sign out</button>
+          </div>
+        </aside>
+
+        <div class="calendar-workspace">
+          <header class="topbar">
+            <div class="mobile-brand">
+              <div class="brand-mark">K</div>
+              <strong>Kalender</strong>
+            </div>
+            <div class="date-controls">
+              <button id="prev-btn" class="icon-button" type="button" title="Previous period">‹</button>
+              <button id="today-btn" class="ghost-action" type="button">Today</button>
+              <button id="next-btn" class="icon-button" type="button" title="Next period">›</button>
+              <h1 id="period-title"></h1>
+            </div>
+            <div class="view-switcher" role="tablist" aria-label="Calendar view">
+              <button class="view-tab active" data-view="month" type="button">Month</button>
+              <button class="view-tab" data-view="week" type="button">Week</button>
+              <button class="view-tab" data-view="day" type="button">Day</button>
+            </div>
+          </header>
+
+          <section id="calendar-grid" class="calendar-grid" aria-live="polite"></section>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="event-modal" class="modal">
+      <form id="event-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Event</p>
+            <h2 id="event-modal-title">New event</h2>
+          </div>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+        </div>
+
+        <input id="event-id" type="hidden" />
+        <label>
+          Calendar
+          <select id="event-calendar" required></select>
+        </label>
+        <label>
+          Title
+          <input id="event-title" type="text" maxlength="120" required />
+        </label>
+        <label>
+          Description
+          <textarea id="event-description" rows="3"></textarea>
+        </label>
+        <div class="form-grid">
+          <label>
+            Start
+            <input id="event-start" type="datetime-local" required />
+          </label>
+          <label>
+            End
+            <input id="event-end" type="datetime-local" required />
+          </label>
+        </div>
+        <div class="form-grid">
+          <label>
+            Category
+            <select id="event-category">
+              <option value="work">Work</option>
+              <option value="personal">Personal</option>
+              <option value="urgent">Urgent</option>
+              <option value="focus">Focus</option>
+              <option value="travel">Travel</option>
+            </select>
+          </label>
+          <label>
+            Color
+            <input id="event-color" type="color" value="#92c5fc" />
+          </label>
+        </div>
+        <label class="checkbox-row">
+          <input id="event-reminder" type="checkbox" />
+          <span>Remind me 15 minutes before</span>
+        </label>
+        <p id="event-error" class="form-message" role="alert"></p>
+        <div class="modal-actions">
+          <button id="delete-event-btn" class="danger-action" type="button">Delete</button>
+          <span></span>
+          <button class="ghost-action" type="button" data-close-modal>Cancel</button>
+          <button class="primary-action" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="calendar-modal" class="modal">
+      <form id="calendar-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Calendar</p>
+            <h2>New calendar</h2>
+          </div>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+        </div>
+        <label>
+          Name
+          <input id="calendar-name" type="text" maxlength="80" required />
+        </label>
+        <label>
+          Color
+          <input id="calendar-color" type="color" value="#92c5fc" />
+        </label>
+        <p id="calendar-error" class="form-message" role="alert"></p>
+        <div class="modal-actions">
+          <span></span>
+          <span></span>
+          <button class="ghost-action" type="button" data-close-modal>Cancel</button>
+          <button class="primary-action" type="submit">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="share-modal" class="modal">
+      <form id="share-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Sharing</p>
+            <h2 id="share-title">Share calendar</h2>
+          </div>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+        </div>
+        <input id="share-calendar-id" type="hidden" />
+        <label>
+          User ID
+          <input id="share-user-id" type="text" placeholder="Supabase auth.users.id" required />
+        </label>
+        <label>
+          Role
+          <select id="share-role">
+            <option value="collaborator">Collaborator</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </label>
+        <p id="share-error" class="form-message" role="alert"></p>
+        <div class="modal-actions">
+          <span></span>
+          <span></span>
+          <button class="ghost-action" type="button" data-close-modal>Cancel</button>
+          <button class="primary-action" type="submit">Share</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
