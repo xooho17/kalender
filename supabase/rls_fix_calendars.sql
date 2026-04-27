@@ -1,54 +1,6 @@
--- Kalender Supabase schema and Row Level Security policies.
--- Run this in the Supabase SQL editor after enabling Email/Password Auth.
-
-create extension if not exists pgcrypto;
-
-do $$
-begin
-  create type public.calendar_role as enum ('owner', 'collaborator', 'viewer');
-exception
-  when duplicate_object then null;
-end;
-$$;
-
-create table public.calendars (
-  id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  name text not null check (char_length(name) between 1 and 80),
-  color text not null default '#92c5fc',
-  created_at timestamptz not null default now()
-);
-
-create table public.calendar_members (
-  calendar_id uuid not null references public.calendars(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  role public.calendar_role not null default 'viewer',
-  created_at timestamptz not null default now(),
-  primary key (calendar_id, user_id)
-);
-
-create table public.events (
-  id uuid primary key default gen_random_uuid(),
-  calendar_id uuid not null references public.calendars(id) on delete cascade,
-  title text not null check (char_length(title) between 1 and 120),
-  description text default '',
-  starts_at timestamptz not null,
-  ends_at timestamptz not null,
-  color text not null default '#92c5fc',
-  category text not null default 'work',
-  reminder_minutes integer,
-  created_by uuid default auth.uid() references auth.users(id) on delete set null,
-  updated_by uuid default auth.uid() references auth.users(id) on delete set null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  check (ends_at > starts_at),
-  check (category in ('work', 'personal', 'urgent', 'focus', 'travel')),
-  check (reminder_minutes is null or reminder_minutes in (5, 10, 15, 30, 60, 1440))
-);
-
-create index calendars_owner_id_idx on public.calendars(owner_id);
-create index calendar_members_user_id_idx on public.calendar_members(user_id);
-create index events_calendar_time_idx on public.events(calendar_id, starts_at, ends_at);
+-- Fix calendar creation RLS for an existing Kalender Supabase project.
+-- Run this once in the Supabase SQL editor if creating a calendar fails with:
+-- "new row violates row-level security policy for table \"calendars\"".
 
 alter table public.calendars
   alter column owner_id set default auth.uid();
@@ -104,17 +56,6 @@ as $$
   );
 $$;
 
-create or replace function public.touch_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  new.updated_by = auth.uid();
-  return new;
-end;
-$$;
-
 create or replace function public.add_calendar_owner_member()
 returns trigger
 language plpgsql
@@ -128,11 +69,6 @@ begin
   return new;
 end;
 $$;
-
-drop trigger if exists events_touch_updated_at on public.events;
-create trigger events_touch_updated_at
-before update on public.events
-for each row execute function public.touch_updated_at();
 
 drop trigger if exists calendars_add_owner_member on public.calendars;
 create trigger calendars_add_owner_member
@@ -196,40 +132,3 @@ on public.calendar_members
 for delete
 to authenticated
 using (public.is_calendar_owner(calendar_id));
-
-drop policy if exists "Members can read events" on public.events;
-create policy "Members can read events"
-on public.events
-for select
-to authenticated
-using (public.is_calendar_member(calendar_id));
-
-drop policy if exists "Editors can create events" on public.events;
-create policy "Editors can create events"
-on public.events
-for insert
-to authenticated
-with check (public.can_edit_calendar(calendar_id));
-
-drop policy if exists "Editors can update events" on public.events;
-create policy "Editors can update events"
-on public.events
-for update
-to authenticated
-using (public.can_edit_calendar(calendar_id))
-with check (public.can_edit_calendar(calendar_id));
-
-drop policy if exists "Editors can delete events" on public.events;
-create policy "Editors can delete events"
-on public.events
-for delete
-to authenticated
-using (public.can_edit_calendar(calendar_id));
-
-do $$
-begin
-  alter publication supabase_realtime add table public.events;
-exception
-  when duplicate_object then null;
-end;
-$$;

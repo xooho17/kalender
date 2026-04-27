@@ -31,6 +31,87 @@ The app uses these tables:
 RLS ensures users can only read calendars they belong to. Owners can share
 calendars, owners and collaborators can modify events, and viewers can only read.
 
+## Authentication and ownership
+
+The frontend signs users in with Supabase Auth email/password. After login,
+Supabase stores the session in the browser and attaches the authenticated user's
+JWT to database requests made with the publishable key.
+
+Calendar creation is handled in `js/api.js`:
+
+```js
+const { data: userData } = await supabase.auth.getUser();
+await supabase
+  .from('calendars')
+  .insert({ name, color, owner_id: userData.user.id });
+```
+
+The database also sets `calendars.owner_id` to `auth.uid()` by default. The
+explicit frontend `owner_id` keeps the data flow clear, while the RLS policy
+still verifies that the submitted owner is the current authenticated user. A
+user cannot create a calendar for someone else by editing browser code.
+
+After a calendar is inserted, the `calendars_add_owner_member` trigger inserts
+an `owner` row into `calendar_members`. That membership is what lets the new
+calendar appear in the shared calendar list and enables future owner actions.
+
+## RLS policy model
+
+RLS must stay enabled on `calendars`, `calendar_members`, and `events`. The app
+uses the browser publishable key, so the database is the authorization boundary.
+
+The policies are:
+
+- `calendars INSERT`: authenticated users can insert only when
+  `owner_id = auth.uid()`.
+- `calendars SELECT`: authenticated users can read calendars they own or where
+  they have a `calendar_members` row.
+- `calendars UPDATE/DELETE`: only owners can modify or delete calendars.
+- `calendar_members SELECT`: users can read their own memberships; owners can
+  read memberships for calendars they own.
+- `calendar_members INSERT/UPDATE/DELETE`: only calendar owners can manage
+  sharing.
+- `events SELECT`: calendar members can read events.
+- `events INSERT/UPDATE/DELETE`: owners and collaborators can modify events;
+  viewers cannot.
+
+Helper functions such as `is_calendar_member`, `is_calendar_owner`, and
+`can_edit_calendar` are `security definer` functions so policies can check
+membership without running into recursive RLS checks on `calendar_members`.
+
+## Fixing calendar creation RLS errors
+
+If creating a calendar fails with:
+
+```text
+new row violates row-level security policy for table "calendars"
+```
+
+the insert policy on `calendars` is missing, stale, or not scoped to
+authenticated users correctly. Run this migration in the Supabase SQL editor:
+
+```sql
+-- File: supabase/rls_fix_calendars.sql
+```
+
+That script:
+
+- Keeps RLS enabled.
+- Ensures `calendars.owner_id` defaults to `auth.uid()`.
+- Recreates the calendar policies for `INSERT`, `SELECT`, `UPDATE`, and
+  `DELETE`.
+- Recreates membership policies needed for sharing.
+- Recreates the trigger that automatically adds the creator as an owner member.
+
+When changing schema or policies later, keep these rules intact:
+
+- Do not add public `anon` policies for private calendar data.
+- Do not hardcode user IDs in frontend code or SQL policies.
+- Do not remove the owner membership trigger unless calendar creation is
+  replaced by an RPC that creates the calendar and membership together.
+- Test create, read, update, delete, share, and viewer-only access with at least
+  two separate Supabase users.
+
 ## Sharing calendars
 
 Open the share action beside an owned calendar and enter the target user's
