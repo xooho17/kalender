@@ -134,16 +134,23 @@ Then open `http://127.0.0.1:4173/`.
 
 The app shell is mobile-first. The viewport disables accidental page zooming and
 uses `100dvh` plus safe-area padding so the authenticated calendar appears at
-the correct scale immediately after login. The main app uses three bottom tabs:
+the correct scale immediately after login. The main app uses four bottom tabs:
 
 - Calendar: day, week, and month views with swipe navigation.
 - Tasks: search, category filters, and weekly event overview.
+- Create: opens the new event form without overlaying the calendar.
 - Settings: calendar selection, sharing, theme, and sign out.
 
-Keep primary actions touch-friendly. New event creation belongs on the floating
-action button, while less frequent controls belong in Tasks or Settings. Avoid
-adding desktop-style sidebars back into the mobile layout because they can force
-the calendar grid to render too wide after login.
+The app also includes `manifest.webmanifest`, app icons, mobile web app meta
+tags, and a lightweight service worker so it can run as a standalone app when
+added to the home screen. Week and day views snap to complete day columns on
+phones; avoid changing them to partial-width columns because that reintroduces
+the clipped-next-day bug.
+
+Keep primary actions touch-friendly. New event creation belongs in the Create
+tab, while less frequent controls belong in Tasks or Settings. Avoid adding
+desktop-style sidebars back into the mobile layout because they can force the
+calendar grid to render too wide after login.
 
 ## GitHub Pages deployment
 

@@ -159,9 +159,6 @@ export function renderCalendar() {
 
 export function renderWeeklyOverview() {
   const weekStart = startOfWeek(new Date());
-  const weekEvents = visibleEvents().filter((event) =>
-    eventOccursOn(event, state.selectedDate),
-  );
   const upcoming = visibleEvents()
     .filter((event) => {
       const start = new Date(event.starts_at);
@@ -184,8 +181,6 @@ export function renderWeeklyOverview() {
           )
           .join('');
 
-  els.newEventBtn.textContent =
-    weekEvents.length > 0 ? `New event (${weekEvents.length} today)` : 'New event';
 }
 
 export function renderEventCalendarOptions() {

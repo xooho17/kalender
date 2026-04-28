@@ -37,6 +37,7 @@ const els = elements();
 boot();
 
 async function boot() {
+  registerServiceWorker();
   bindUiEvents();
   document.documentElement.dataset.theme =
     localStorage.getItem('kalender-theme') || 'light';
@@ -60,6 +61,15 @@ async function boot() {
   });
 }
 
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // The app remains fully usable if service worker registration is blocked.
+    });
+  });
+}
+
 function bindUiEvents() {
   els.loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -73,7 +83,6 @@ function bindUiEvents() {
 
   els.logoutBtn.addEventListener('click', signOut);
   els.themeToggle.addEventListener('click', toggleTheme);
-  els.newEventBtn.addEventListener('click', () => openEventModal());
   els.newCalendarBtn.addEventListener('click', openCalendarModal);
   els.prevBtn.addEventListener('click', () => movePeriod(-1));
   els.todayBtn.addEventListener('click', () => {
@@ -91,6 +100,10 @@ function bindUiEvents() {
 
   els.bottomTabs.forEach((tab) => {
     tab.addEventListener('click', () => {
+      if (tab.dataset.tab === 'create') {
+        openEventModal();
+        return;
+      }
       setActivePanel(tab.dataset.tab);
     });
   });
