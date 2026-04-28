@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kalender-shell-v1';
+const CACHE_NAME = 'kalender-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',

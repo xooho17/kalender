@@ -12,7 +12,7 @@ import {
   startOfWeek,
   toLocalInputValue,
 } from './dateUtils.js';
-import { activeCalendar, canEditCalendar, state, visibleEvents } from './store.js';
+import { canEditCalendar, state, visibleEvents } from './store.js';
 
 const els = {};
 
@@ -219,6 +219,13 @@ export function openEventModal(event = null, date = null) {
   els.eventCategory.value = event?.category || 'work';
   els.eventColor.value = event?.color || CATEGORY_COLORS[event?.category || 'work'];
   els.eventReminder.checked = Boolean(event?.reminder_minutes);
+  const options = els.eventModal.querySelector('.event-options');
+  if (options) {
+    options.open = Boolean(
+      event &&
+        (event.description || event.reminder_minutes || event.category !== 'work'),
+    );
+  }
   els.deleteEventBtn.hidden = !event;
   els.eventError.textContent = '';
   els.eventModal.showModal();
@@ -292,7 +299,7 @@ function renderMonth() {
       <span class="day-number">${day.getDate()}</span>
       <span class="event-stack">
         ${dayEvents
-          .slice(0, 4)
+          .slice(0, 3)
           .map(
             (event) => `
               <span class="event-pill" draggable="true" data-event-id="${event.id}" style="--event-color:${event.color}">
@@ -301,7 +308,7 @@ function renderMonth() {
             `,
           )
           .join('')}
-        ${dayEvents.length > 4 ? `<span class="more-pill">+${dayEvents.length - 4}</span>` : ''}
+        ${dayEvents.length > 3 ? `<span class="more-pill">+${dayEvents.length - 3}</span>` : ''}
       </span>
     `;
     els.calendarGrid.append(cell);
