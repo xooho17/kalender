@@ -69,6 +69,8 @@ export function bindElements() {
     els[toCamel(id)] = document.getElementById(id);
   });
   els.viewTabs = [...document.querySelectorAll('.view-tab')];
+  els.bottomTabs = [...document.querySelectorAll('.bottom-tab')];
+  els.appPanels = [...document.querySelectorAll('.app-panel')];
   els.closeModalButtons = [...document.querySelectorAll('[data-close-modal]')];
   return els;
 }
@@ -81,6 +83,16 @@ export function setAuthenticatedView(isAuthenticated) {
   els.loginView.classList.toggle('hidden', isAuthenticated);
   els.calendarView.classList.toggle('hidden', !isAuthenticated);
   document.body.classList.toggle('authenticated', isAuthenticated);
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+}
+
+export function setActivePanel(panelName) {
+  els.bottomTabs.forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.tab === panelName);
+  });
+  els.appPanels.forEach((panel) => {
+    panel.classList.toggle('active', panel.dataset.panel === panelName);
+  });
 }
 
 export function renderUser() {

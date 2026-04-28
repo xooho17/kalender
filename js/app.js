@@ -26,6 +26,7 @@ import {
   renderCalendar,
   renderCalendars,
   renderUser,
+  setActivePanel,
   setAuthenticatedView,
   showToast,
 } from './ui.js';
@@ -88,6 +89,12 @@ function bindUiEvents() {
     });
   });
 
+  els.bottomTabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      setActivePanel(tab.dataset.tab);
+    });
+  });
+
   els.eventSearch.addEventListener('input', () => {
     state.search = els.eventSearch.value;
     renderAll();
@@ -135,6 +142,14 @@ function bindUiEvents() {
     if (event.target.closest('[data-date]')) event.preventDefault();
   });
   els.calendarGrid.addEventListener('drop', handleEventDrop);
+  bindSwipeNavigation();
+
+  els.weeklyOverview.addEventListener('click', (event) => {
+    const eventButton = event.target.closest('[data-event-id]');
+    if (!eventButton) return;
+    const calendarEvent = state.events.find((item) => item.id === eventButton.dataset.eventId);
+    if (calendarEvent) openEventModal(calendarEvent);
+  });
 
   els.eventCategory.addEventListener('change', () => {
     els.eventColor.value = CATEGORY_COLORS[els.eventCategory.value];
@@ -157,6 +172,7 @@ async function loadWorkspace() {
   renderUser();
   state.calendars = await fetchCalendars();
   state.activeCalendarId = state.calendars[0]?.id || null;
+  setActivePanel('calendar');
   await setupRealtime();
   await refreshEventsAndRender();
 }
@@ -298,6 +314,41 @@ function toggleTheme() {
 function syncThemeButton() {
   els.themeToggle.textContent =
     document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+}
+
+function bindSwipeNavigation() {
+  let startX = 0;
+  let startY = 0;
+  let startedAt = 0;
+
+  els.calendarGrid.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.touches.length !== 1) return;
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      startedAt = Date.now();
+    },
+    { passive: true },
+  );
+
+  els.calendarGrid.addEventListener(
+    'touchend',
+    (event) => {
+      if (!startedAt) return;
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const isHorizontal = Math.abs(deltaX) > 72 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5;
+      const isQuick = Date.now() - startedAt < 600;
+      startedAt = 0;
+
+      if (isHorizontal && isQuick) {
+        movePeriod(deltaX > 0 ? -1 : 1);
+      }
+    },
+    { passive: true },
+  );
 }
 
 function scheduleReminders() {

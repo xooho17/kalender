@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>Kalender</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,115 +18,119 @@
   <body>
     <main id="app" class="app-shell">
       <section id="login-view" class="login-view" aria-labelledby="login-title">
-        <div class="login-art">
-          <div class="orbital-calendar" aria-hidden="true">
-            <div class="mini-card card-one"></div>
-            <div class="mini-card card-two"></div>
-            <div class="mini-card card-three"></div>
-          </div>
-          <div>
-            <p class="eyebrow">Shared planning</p>
+        <div class="login-card">
+          <div class="login-heading">
+            <div class="brand-mark">K</div>
             <h1 id="login-title">Kalender</h1>
             <p class="login-copy">
-              A focused collaborative calendar for teams, families, and anyone
-              who needs shared plans without the clutter.
+              Shared plans, clean days, and a calendar that stays calm on every
+              screen.
             </p>
           </div>
-        </div>
 
-        <form id="login-form" class="login-panel">
-          <div>
-            <p class="eyebrow">Sign in</p>
-            <h2>Welcome back</h2>
-            <p>Use the account created for you in Supabase.</p>
-          </div>
-          <label>
-            Email
-            <input id="email" type="email" autocomplete="email" required />
-          </label>
-          <label>
-            Password
-            <input
-              id="password"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-          </label>
-          <button class="primary-action" type="submit">Sign in</button>
-          <p id="login-error" class="form-message" role="alert"></p>
-        </form>
+          <form id="login-form" class="login-panel">
+            <label>
+              Email
+              <input id="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Password
+              <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            <button class="primary-action" type="submit">Sign in</button>
+            <p id="login-error" class="form-message" role="alert"></p>
+          </form>
+        </div>
       </section>
 
       <section id="calendar-view" class="calendar-view hidden">
-        <aside class="sidebar">
-          <div class="brand-row">
-            <div class="brand-mark">K</div>
-            <div>
-              <strong>Kalender</strong>
-              <span id="user-email"></span>
-            </div>
-          </div>
+        <div class="app-panels">
+          <section class="app-panel active" data-panel="calendar">
+            <header class="topbar">
+              <div class="mobile-brand">
+                <div class="brand-mark">K</div>
+                <div>
+                  <strong>Kalender</strong>
+                  <span id="user-email"></span>
+                </div>
+              </div>
+              <div class="view-switcher" role="tablist" aria-label="Calendar view">
+                <button class="view-tab active" data-view="month" type="button">Month</button>
+                <button class="view-tab" data-view="week" type="button">Week</button>
+                <button class="view-tab" data-view="day" type="button">Day</button>
+              </div>
+            </header>
 
-          <button id="new-event-btn" class="primary-action" type="button">
-            New event
-          </button>
-
-          <section class="side-section">
-            <div class="section-heading">
-              <h2>Calendars</h2>
-              <button id="new-calendar-btn" class="icon-button" type="button" title="Create calendar">
-                +
-              </button>
+            <div class="date-controls">
+              <button id="prev-btn" class="icon-button" type="button" title="Previous period">&lt;</button>
+              <h1 id="period-title"></h1>
+              <button id="today-btn" class="ghost-action" type="button">Today</button>
+              <button id="next-btn" class="icon-button" type="button" title="Next period">&gt;</button>
             </div>
-            <div id="calendar-list" class="calendar-list"></div>
+
+            <section id="calendar-grid" class="calendar-grid" aria-live="polite"></section>
           </section>
 
-          <section class="side-section">
-            <div class="section-heading">
-              <h2>Filters</h2>
-            </div>
+          <section class="app-panel utility-panel" data-panel="tasks">
+            <header class="panel-header">
+              <p class="eyebrow">Focus</p>
+              <h1>Tasks</h1>
+            </header>
             <label class="search-box">
-              <span>Search</span>
+              <span>Search events</span>
               <input id="event-search" type="search" placeholder="Title or description" />
             </label>
             <div id="category-filters" class="category-filters"></div>
+            <section class="side-section overview-section">
+              <div class="section-heading">
+                <h2>This week</h2>
+              </div>
+              <div id="weekly-overview" class="weekly-overview"></div>
+            </section>
           </section>
 
-          <section class="side-section overview-section">
-            <div class="section-heading">
-              <h2>This week</h2>
+          <section class="app-panel utility-panel" data-panel="settings">
+            <header class="panel-header">
+              <p class="eyebrow">Account</p>
+              <h1>Settings</h1>
+            </header>
+            <section class="side-section">
+              <div class="section-heading">
+                <h2>Calendars</h2>
+                <button id="new-calendar-btn" class="icon-button" type="button" title="Create calendar">
+                  +
+                </button>
+              </div>
+              <div id="calendar-list" class="calendar-list"></div>
+            </section>
+            <div class="settings-actions">
+              <button id="theme-toggle" class="ghost-action" type="button">Dark mode</button>
+              <button id="logout-btn" class="ghost-action" type="button">Sign out</button>
             </div>
-            <div id="weekly-overview" class="weekly-overview"></div>
           </section>
-
-          <div class="sidebar-footer">
-            <button id="theme-toggle" class="ghost-action" type="button">Dark mode</button>
-            <button id="logout-btn" class="ghost-action" type="button">Sign out</button>
-          </div>
-        </aside>
-
-        <div class="calendar-workspace">
-          <header class="topbar">
-            <div class="mobile-brand">
-              <div class="brand-mark">K</div>
-              <strong>Kalender</strong>
-            </div>
-            <div class="date-controls">
-              <button id="prev-btn" class="icon-button" type="button" title="Previous period">‹</button>
-              <button id="today-btn" class="ghost-action" type="button">Today</button>
-              <button id="next-btn" class="icon-button" type="button" title="Next period">›</button>
-              <h1 id="period-title"></h1>
-            </div>
-            <div class="view-switcher" role="tablist" aria-label="Calendar view">
-              <button class="view-tab active" data-view="month" type="button">Month</button>
-              <button class="view-tab" data-view="week" type="button">Week</button>
-              <button class="view-tab" data-view="day" type="button">Day</button>
-            </div>
-          </header>
-
-          <section id="calendar-grid" class="calendar-grid" aria-live="polite"></section>
         </div>
+
+        <button id="new-event-btn" class="fab" type="button" aria-label="Create event">+</button>
+
+        <nav class="bottom-tabs" aria-label="Primary">
+          <button class="bottom-tab active" data-tab="calendar" type="button">
+            <span class="tab-icon">□</span>
+            Calendar
+          </button>
+          <button class="bottom-tab" data-tab="tasks" type="button">
+            <span class="tab-icon">✓</span>
+            Tasks
+          </button>
+          <button class="bottom-tab" data-tab="settings" type="button">
+            <span class="tab-icon">○</span>
+            Settings
+          </button>
+        </nav>
       </section>
     </main>
 
@@ -134,7 +141,7 @@
             <p class="eyebrow">Event</p>
             <h2 id="event-modal-title">New event</h2>
           </div>
-          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>x</button>
         </div>
 
         <input id="event-id" type="hidden" />
@@ -197,7 +204,7 @@
             <p class="eyebrow">Calendar</p>
             <h2>New calendar</h2>
           </div>
-          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>x</button>
         </div>
         <label>
           Name
@@ -224,7 +231,7 @@
             <p class="eyebrow">Sharing</p>
             <h2 id="share-title">Share calendar</h2>
           </div>
-          <button class="icon-button" value="cancel" type="button" data-close-modal>×</button>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>x</button>
         </div>
         <input id="share-calendar-id" type="hidden" />
         <label>

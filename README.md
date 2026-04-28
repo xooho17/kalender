@@ -130,6 +130,21 @@ node server.mjs
 
 Then open `http://127.0.0.1:4173/`.
 
+## Mobile UI notes
+
+The app shell is mobile-first. The viewport disables accidental page zooming and
+uses `100dvh` plus safe-area padding so the authenticated calendar appears at
+the correct scale immediately after login. The main app uses three bottom tabs:
+
+- Calendar: day, week, and month views with swipe navigation.
+- Tasks: search, category filters, and weekly event overview.
+- Settings: calendar selection, sharing, theme, and sign out.
+
+Keep primary actions touch-friendly. New event creation belongs on the floating
+action button, while less frequent controls belong in Tasks or Settings. Avoid
+adding desktop-style sidebars back into the mobile layout because they can force
+the calendar grid to render too wide after login.
+
 ## GitHub Pages deployment
 
 1. Push this folder to a GitHub repository.
