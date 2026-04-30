@@ -33,6 +33,16 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
+create table public.tags (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 32),
+  color text not null default '#92c5fc',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, name)
+);
+
 create table public.events (
   id uuid primary key default gen_random_uuid(),
   calendar_id uuid not null references public.calendars(id) on delete cascade,
@@ -42,6 +52,7 @@ create table public.events (
   ends_at timestamptz not null,
   color text not null default '#92c5fc',
   category text not null default 'work',
+  tag_id uuid references public.tags(id) on delete set null,
   completed boolean not null default false,
   reminder_minutes integer,
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
@@ -56,6 +67,7 @@ create table public.events (
 create index calendars_owner_id_idx on public.calendars(owner_id);
 create index calendar_members_user_id_idx on public.calendar_members(user_id);
 create index profiles_email_idx on public.profiles(lower(email));
+create index tags_user_id_idx on public.tags(user_id);
 create index events_calendar_time_idx on public.events(calendar_id, starts_at, ends_at);
 
 alter table public.calendars
@@ -64,6 +76,7 @@ alter table public.calendars
 alter table public.calendars enable row level security;
 alter table public.calendar_members enable row level security;
 alter table public.profiles enable row level security;
+alter table public.tags enable row level security;
 alter table public.events enable row level security;
 
 create or replace function public.is_calendar_member(target_calendar_id uuid)
@@ -113,6 +126,21 @@ as $$
   );
 $$;
 
+create or replace function public.can_use_tag(target_tag_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select target_tag_id is null or exists (
+    select 1
+    from public.tags t
+    where t.id = target_tag_id
+      and t.user_id = auth.uid()
+  );
+$$;
+
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
@@ -120,6 +148,16 @@ as $$
 begin
   new.updated_at = now();
   new.updated_by = auth.uid();
+  return new;
+end;
+$$;
+
+create or replace function public.touch_tag_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
   return new;
 end;
 $$;
@@ -207,6 +245,11 @@ create trigger events_touch_updated_at
 before update on public.events
 for each row execute function public.touch_updated_at();
 
+drop trigger if exists tags_touch_updated_at on public.tags;
+create trigger tags_touch_updated_at
+before update on public.tags
+for each row execute function public.touch_tag_updated_at();
+
 drop trigger if exists calendars_add_owner_member on public.calendars;
 create trigger calendars_add_owner_member
 after insert on public.calendars
@@ -255,6 +298,35 @@ for select
 to authenticated
 using (id = auth.uid());
 
+drop policy if exists "Users can read their tags" on public.tags;
+create policy "Users can read their tags"
+on public.tags
+for select
+to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Users can create their tags" on public.tags;
+create policy "Users can create their tags"
+on public.tags
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can update their tags" on public.tags;
+create policy "Users can update their tags"
+on public.tags
+for update
+to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can delete their tags" on public.tags;
+create policy "Users can delete their tags"
+on public.tags
+for delete
+to authenticated
+using (user_id = auth.uid());
+
 drop policy if exists "Owners can share calendars" on public.calendar_members;
 create policy "Owners can share calendars"
 on public.calendar_members
@@ -289,7 +361,7 @@ create policy "Editors can create events"
 on public.events
 for insert
 to authenticated
-with check (public.can_edit_calendar(calendar_id));
+with check (public.can_edit_calendar(calendar_id) and public.can_use_tag(tag_id));
 
 drop policy if exists "Editors can update events" on public.events;
 create policy "Editors can update events"
@@ -297,7 +369,7 @@ on public.events
 for update
 to authenticated
 using (public.can_edit_calendar(calendar_id))
-with check (public.can_edit_calendar(calendar_id));
+with check (public.can_edit_calendar(calendar_id) and public.can_use_tag(tag_id));
 
 drop policy if exists "Editors can delete events" on public.events;
 create policy "Editors can delete events"

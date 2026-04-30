@@ -1,7 +1,7 @@
-import { CATEGORIES, CATEGORY_COLORS } from './config.js';
 import {
   addDays,
   dateKey,
+  endOfDay,
   eventOccursOn,
   formatRangeTitle,
   fromLocalInputValue,
@@ -12,7 +12,14 @@ import {
   startOfWeek,
   toLocalInputValue,
 } from './dateUtils.js';
-import { canEditCalendar, state, visibleEvents } from './store.js';
+import {
+  allTags,
+  canEditCalendar,
+  eventTagKey,
+  findTag,
+  state,
+  visibleEvents,
+} from './store.js';
 
 const els = {};
 
@@ -33,6 +40,8 @@ export function bindElements() {
     'logout-btn',
     'new-event-btn',
     'new-calendar-btn',
+    'new-tag-btn',
+    'tag-list',
     'prev-btn',
     'today-btn',
     'next-btn',
@@ -48,6 +57,8 @@ export function bindElements() {
     'event-start',
     'event-end',
     'event-category',
+    'event-tag-id',
+    'event-tag-options',
     'event-color',
     'event-reminder',
     'event-error',
@@ -57,6 +68,14 @@ export function bindElements() {
     'calendar-name',
     'calendar-color',
     'calendar-error',
+    'tag-modal',
+    'tag-form',
+    'tag-modal-title',
+    'tag-id',
+    'tag-name',
+    'tag-color',
+    'tag-error',
+    'delete-tag-btn',
     'share-modal',
     'share-form',
     'share-title',
@@ -101,10 +120,12 @@ export function renderUser() {
 
 export function renderAll() {
   renderCalendars();
+  renderTags();
   renderCategoryFilters();
   renderCalendar();
   renderWeeklyOverview();
   renderEventCalendarOptions();
+  renderEventTagOptions();
 }
 
 export function renderCalendars() {
@@ -136,17 +157,39 @@ export function renderCalendars() {
 
 export function renderCategoryFilters() {
   els.categoryFilters.innerHTML = '';
-  CATEGORIES.forEach((category) => {
+  allTags().forEach((tag) => {
     const label = document.createElement('label');
     label.className = 'category-chip';
     label.innerHTML = `
-      <input type="checkbox" value="${category}" ${
-        state.selectedCategories.has(category) ? 'checked' : ''
+      <input type="checkbox" value="${tag.id}" ${
+        state.selectedCategories.has(tag.id) ? 'checked' : ''
       } />
-      <span style="--category-color:${CATEGORY_COLORS[category]}"></span>
-      ${titleCase(category)}
+      <span style="--category-color:${tag.color}"></span>
+      ${escapeHtml(tag.name)}
     `;
     els.categoryFilters.append(label);
+  });
+}
+
+export function renderTags() {
+  els.tagList.innerHTML = '';
+
+  if (!state.tags.length) {
+    els.tagList.innerHTML = '<p class="empty-note">No custom tags yet.</p>';
+    return;
+  }
+
+  state.tags.forEach((tag) => {
+    const row = document.createElement('div');
+    row.className = 'tag-list-item';
+    row.dataset.tagId = tag.id;
+    row.innerHTML = `
+      <span class="tag-dot" style="--tag-color:${tag.color}"></span>
+      <strong>${escapeHtml(tag.name)}</strong>
+      <button class="tag-edit" type="button">Edit</button>
+      <button class="tag-delete" type="button">Delete</button>
+    `;
+    els.tagList.append(row);
   });
 }
 
@@ -177,7 +220,7 @@ export function renderWeeklyOverview() {
           .map(
             (event) => `
               <div class="overview-event ${event.completed ? 'completed' : ''}">
-                <span style="--event-color:${event.color}"></span>
+                <span style="--event-color:${eventColor(event)}"></span>
                 <button
                   class="task-check"
                   type="button"
@@ -209,6 +252,25 @@ export function renderEventCalendarOptions() {
     .join('');
 }
 
+export function renderEventTagOptions(selectedTagId = null) {
+  const selected = selectedTagId || els.eventTagId.value || 'work';
+  els.eventTagOptions.innerHTML = allTags()
+    .map(
+      (tag) => `
+        <button
+          class="tag-picker-chip ${tag.id === selected ? 'active' : ''}"
+          type="button"
+          data-tag-id="${tag.id}"
+          style="--tag-color:${tag.color}"
+        >
+          <span></span>
+          ${escapeHtml(tag.name)}
+        </button>
+      `,
+    )
+    .join('');
+}
+
 export function openEventModal(event = null, date = null) {
   const writableCalendar =
     state.calendars.find((calendar) => calendar.id === state.activeCalendarId && canEditCalendar(calendar.id)) ||
@@ -229,8 +291,7 @@ export function openEventModal(event = null, date = null) {
   els.eventDescription.value = event?.description || '';
   els.eventStart.value = toLocalInputValue(start);
   els.eventEnd.value = toLocalInputValue(end);
-  els.eventCategory.value = event?.category || 'work';
-  els.eventColor.value = event?.color || CATEGORY_COLORS[event?.category || 'work'];
+  selectEventTag(event ? eventTagKey(event) : 'work');
   els.eventReminder.checked = Boolean(event?.reminder_minutes);
   const options = els.eventModal.querySelector('.event-options');
   if (options) {
@@ -249,6 +310,7 @@ export function readEventForm() {
   const existingEvent = id ? state.events.find((event) => event.id === id) : null;
   const startsAt = fromLocalInputValue(els.eventStart.value);
   const endsAt = fromLocalInputValue(els.eventEnd.value);
+  const selectedTag = findTag(els.eventTagId.value) || findTag('work');
 
   if (endsAt <= startsAt) {
     throw new Error('End time must be after start time.');
@@ -261,11 +323,20 @@ export function readEventForm() {
     description: els.eventDescription.value.trim(),
     starts_at: startsAt.toISOString(),
     ends_at: endsAt.toISOString(),
-    category: els.eventCategory.value,
-    color: els.eventColor.value,
+    category: selectedTag.builtIn ? selectedTag.id : 'work',
+    tag_id: selectedTag.builtIn ? null : selectedTag.id,
+    color: selectedTag.color,
     reminder_minutes: els.eventReminder.checked ? 15 : null,
     completed: Boolean(existingEvent?.completed),
   };
+}
+
+export function selectEventTag(tagId) {
+  const tag = findTag(tagId) || findTag('work');
+  els.eventTagId.value = tag.id;
+  els.eventCategory.value = tag.builtIn ? tag.id : 'work';
+  els.eventColor.value = tag.color;
+  renderEventTagOptions(tag.id);
 }
 
 export function openCalendarModal() {
@@ -273,6 +344,26 @@ export function openCalendarModal() {
   els.calendarColor.value = '#92c5fc';
   els.calendarError.textContent = '';
   els.calendarModal.showModal();
+}
+
+export function openTagModal(tag = null) {
+  els.tagModalTitle.textContent = tag ? 'Edit tag' : 'New tag';
+  els.tagId.value = tag?.id || '';
+  els.tagName.value = tag?.name || '';
+  els.tagColor.value = tag?.color || '#92c5fc';
+  els.deleteTagBtn.hidden = !tag;
+  els.tagError.textContent = '';
+  els.tagModal.showModal();
+}
+
+export function readTagForm() {
+  const name = els.tagName.value.trim();
+  if (!name) throw new Error('Tag name is required.');
+  return {
+    id: els.tagId.value || null,
+    name,
+    color: els.tagColor.value,
+  };
 }
 
 export function openShareModal(calendarId) {
@@ -319,7 +410,7 @@ function renderMonth() {
           .slice(0, 3)
           .map(
             (event) => `
-              <span class="event-pill" draggable="true" data-event-id="${event.id}" style="--event-color:${event.color}">
+              <span class="event-pill ${eventPillClass(event, day)}" draggable="true" data-event-id="${event.id}" style="--event-color:${eventColor(event)}">
                 ${escapeHtml(event.title)}
               </span>
             `,
@@ -373,7 +464,7 @@ function renderWeekListDay(day) {
                       type="button"
                       data-event-id="${event.id}"
                     >
-                      <span style="--event-color:${event.color}"></span>
+                      <span style="--event-color:${eventColor(event)}"></span>
                       <strong>${escapeHtml(event.title)}</strong>
                       <small>${formatEventTime(event)}</small>
                     </button>
@@ -422,7 +513,7 @@ function renderPositionedEvent(event) {
       class="time-event"
       draggable="true"
       data-event-id="${event.id}"
-      style="--event-color:${event.color}; --top:${top}%; --height:${height}%"
+      style="--event-color:${eventColor(event)}; --top:${top}%; --height:${height}%"
       type="button"
     >
       <strong>${escapeHtml(event.title)}</strong>
@@ -458,8 +549,16 @@ function formatEventTime(event) {
   return formatter.format(new Date(event.starts_at));
 }
 
-function titleCase(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function eventColor(event) {
+  return findTag(event.tag_id)?.color || event.color;
+}
+
+function eventPillClass(event, day) {
+  const classes = [];
+  if (new Date(event.starts_at) < startOfDay(day)) classes.push('continues-left');
+  if (new Date(event.ends_at) > endOfDay(day)) classes.push('continues-right');
+  if (event.completed) classes.push('completed');
+  return classes.join(' ');
 }
 
 function escapeHtml(value) {

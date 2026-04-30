@@ -27,6 +27,7 @@ The app uses these tables:
 - `calendars`: owner-created calendars.
 - `calendar_members`: access control with `owner`, `collaborator`, and `viewer` roles.
 - `profiles`: a safe public profile table populated from Supabase Auth for email-based sharing.
+- `tags`: user-owned custom tags with names and colors.
 - `events`: shared events with title, description, time range, color, category, completion state, and optional reminder.
 
 RLS ensures users can only read calendars they belong to. Owners can share
@@ -78,6 +79,9 @@ The policies are:
 - `profiles SELECT`: users can read only their own profile. Calendar sharing by
   email happens through the `share_calendar_by_email` RPC, which checks that the
   caller owns the calendar before resolving the target email.
+- `tags SELECT/INSERT/UPDATE/DELETE`: users can manage only their own tags.
+  Events may reference a custom tag only when that tag belongs to the current
+  user; the event also stores the tag color as a display snapshot.
 
 Helper functions such as `is_calendar_member`, `is_calendar_owner`, and
 `can_edit_calendar` are `security definer` functions so policies can check
@@ -129,8 +133,13 @@ membership only if the caller is the calendar owner.
 For an existing Supabase project, run these SQL files in order as needed:
 
 1. `supabase/rls_fix_calendars.sql` if calendar creation is blocked by RLS.
-2. `supabase/feature_updates.sql` to add task completion, email sharing, and
-   the profile sync trigger.
+2. `supabase/feature_updates.sql` to add task completion, custom tags, email
+   sharing, and the profile sync trigger.
+
+`feature_updates.sql` also creates the custom tag system. Tags are managed in
+Settings, appear as horizontal chips in the event sheet, and can be used for
+calendar events or task-style events. Deleting a tag leaves existing events in
+place and clears their tag link through `on delete set null`.
 
 Calendar deletion is handled by deleting a row from `calendars`. Related
 `calendar_members` and `events` rows are cleaned up by `on delete cascade`, and

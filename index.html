@@ -114,6 +114,15 @@
               </div>
               <div id="calendar-list" class="calendar-list"></div>
             </section>
+            <section class="side-section tags-section">
+              <div class="section-heading">
+                <h2>Tags</h2>
+                <button id="new-tag-btn" class="icon-button" type="button" title="Create tag">
+                  +
+                </button>
+              </div>
+              <div id="tag-list" class="tag-list"></div>
+            </section>
             <div class="settings-actions">
               <button id="theme-toggle" class="ghost-action" type="button">Dark mode</button>
               <button id="logout-btn" class="ghost-action" type="button">Sign out</button>
@@ -176,21 +185,14 @@
             <textarea id="event-description" rows="2"></textarea>
           </label>
           <div class="form-grid">
-            <label>
-              Category
-              <select id="event-category">
-                <option value="work">Work</option>
-                <option value="personal">Personal</option>
-                <option value="urgent">Urgent</option>
-                <option value="focus">Focus</option>
-                <option value="travel">Travel</option>
-              </select>
-            </label>
-            <label>
-              Color
-              <input id="event-color" type="color" value="#92c5fc" />
+            <label class="tag-picker-label">
+              Tag
+              <span id="event-tag-options" class="tag-picker"></span>
             </label>
           </div>
+          <input id="event-category" type="hidden" value="work" />
+          <input id="event-tag-id" type="hidden" />
+          <input id="event-color" type="hidden" value="#92c5fc" />
           <label class="checkbox-row">
             <input id="event-reminder" type="checkbox" />
             <span>Remind me 15 minutes before</span>
@@ -230,6 +232,34 @@
           <span></span>
           <button class="ghost-action" type="button" data-close-modal>Cancel</button>
           <button class="primary-action" type="submit">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="tag-modal" class="modal tag-modal">
+      <form id="tag-form" method="dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Tag</p>
+            <h2 id="tag-modal-title">New tag</h2>
+          </div>
+          <button class="icon-button" value="cancel" type="button" data-close-modal>x</button>
+        </div>
+        <input id="tag-id" type="hidden" />
+        <label>
+          Name
+          <input id="tag-name" type="text" maxlength="32" required />
+        </label>
+        <label>
+          Color
+          <input id="tag-color" type="color" value="#92c5fc" />
+        </label>
+        <p id="tag-error" class="form-message" role="alert"></p>
+        <div class="modal-actions">
+          <button id="delete-tag-btn" class="danger-action" type="button">Delete</button>
+          <span></span>
+          <button class="ghost-action" type="button" data-close-modal>Cancel</button>
+          <button class="primary-action" type="submit">Save</button>
         </div>
       </form>
     </dialog>

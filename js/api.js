@@ -54,6 +54,44 @@ export async function deleteCalendar(id) {
   if (error) throw error;
 }
 
+export async function fetchTags() {
+  const { data, error } = await supabase
+    .from('tags')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createTag({ name, color }) {
+  const { data, error } = await supabase
+    .from('tags')
+    .insert({ name, color })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTag(id, { name, color }) {
+  const { data, error } = await supabase
+    .from('tags')
+    .update({ name, color })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTag(id) {
+  const { error } = await supabase.from('tags').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function shareCalendar({ calendar_id, email, role }) {
   const { data, error } = await supabase
     .rpc('share_calendar_by_email', {
@@ -90,6 +128,7 @@ export async function saveEvent(event) {
     ends_at: event.ends_at,
     color: event.color,
     category: event.category,
+    tag_id: event.tag_id || null,
     reminder_minutes: event.reminder_minutes,
     completed: Boolean(event.completed),
   };

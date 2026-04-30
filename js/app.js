@@ -1,9 +1,12 @@
 import {
   createCalendar,
+  createTag,
   deleteCalendar,
   deleteEvent,
+  deleteTag,
   fetchCalendars,
   fetchEvents,
+  fetchTags,
   getSession,
   onAuthStateChange,
   removeChannel,
@@ -13,21 +16,24 @@ import {
   signIn,
   signOut,
   subscribeToEvents,
+  updateTag,
 } from './api.js';
-import { CATEGORY_COLORS } from './config.js';
 import { addDays, addMonths, dateKey, startOfDay, startOfMonthGrid, startOfWeek } from './dateUtils.js';
-import { canEditCalendar, state } from './store.js';
+import { canEditCalendar, state, syncSelectedTags } from './store.js';
 import {
   bindElements,
   elements,
   openCalendarModal,
   openEventModal,
+  openTagModal,
   openShareModal,
   readEventForm,
+  readTagForm,
   renderAll,
   renderCalendar,
   renderCalendars,
   renderUser,
+  selectEventTag,
   setActivePanel,
   setAuthenticatedView,
   showToast,
@@ -57,6 +63,7 @@ async function boot() {
     } else {
       state.calendars = [];
       state.events = [];
+      state.tags = [];
       await removeChannel(state.realtimeChannel);
       state.realtimeChannel = null;
     }
@@ -86,6 +93,7 @@ function bindUiEvents() {
   els.logoutBtn.addEventListener('click', signOut);
   els.themeToggle.addEventListener('click', toggleTheme);
   els.newCalendarBtn.addEventListener('click', openCalendarModal);
+  els.newTagBtn.addEventListener('click', () => openTagModal());
   els.prevBtn.addEventListener('click', () => movePeriod(-1));
   els.todayBtn.addEventListener('click', () => {
     state.selectedDate = new Date();
@@ -123,6 +131,12 @@ function bindUiEvents() {
     }
   });
 
+  els.eventTagOptions.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-tag-id]');
+    if (!chip) return;
+    selectEventTag(chip.dataset.tagId);
+  });
+
   els.calendarList.addEventListener('click', (event) => {
     const shareTarget = event.target.closest('.share-affordance');
     const deleteTarget = event.target.closest('.calendar-delete');
@@ -149,6 +163,22 @@ function bindUiEvents() {
     state.activeCalendarId =
       state.activeCalendarId === item.dataset.calendarId ? null : item.dataset.calendarId;
     renderAll();
+  });
+
+  els.tagList.addEventListener('click', (event) => {
+    const row = event.target.closest('.tag-list-item');
+    if (!row) return;
+    const tag = state.tags.find((item) => item.id === row.dataset.tagId);
+    if (!tag) return;
+
+    if (event.target.closest('.tag-delete')) {
+      handleDeleteTag(tag.id);
+      return;
+    }
+
+    if (event.target.closest('.tag-edit') || row.contains(event.target)) {
+      openTagModal(tag);
+    }
   });
 
   els.calendarGrid.addEventListener('click', (event) => {
@@ -187,13 +217,11 @@ function bindUiEvents() {
     if (calendarEvent) openEventModal(calendarEvent);
   });
 
-  els.eventCategory.addEventListener('change', () => {
-    els.eventColor.value = CATEGORY_COLORS[els.eventCategory.value];
-  });
-
   els.eventForm.addEventListener('submit', handleEventSubmit);
   els.deleteEventBtn.addEventListener('click', handleDeleteEvent);
   els.calendarForm.addEventListener('submit', handleCreateCalendar);
+  els.tagForm.addEventListener('submit', handleSaveTag);
+  els.deleteTagBtn.addEventListener('click', () => handleDeleteTag(els.tagId.value));
   els.shareForm.addEventListener('submit', handleShareCalendar);
   els.closeModalButtons.forEach((button) => {
     button.addEventListener('click', () => button.closest('dialog').close());
@@ -206,7 +234,10 @@ function bindUiEvents() {
 
 async function loadWorkspace() {
   renderUser();
-  state.calendars = await fetchCalendars();
+  const [calendars, tags] = await Promise.all([fetchCalendars(), fetchTags()]);
+  state.calendars = calendars;
+  state.tags = tags;
+  syncSelectedTags();
   state.activeCalendarId = state.calendars[0]?.id || null;
   setActivePanel('calendar');
   await setupRealtime();
@@ -296,6 +327,49 @@ async function handleCreateCalendar(event) {
     showToast('Calendar created');
   } catch (error) {
     els.calendarError.textContent = error.message;
+  }
+}
+
+async function handleSaveTag(event) {
+  event.preventDefault();
+  els.tagError.textContent = '';
+  try {
+    const tag = readTagForm();
+    if (tag.id) {
+      await updateTag(tag.id, tag);
+      showToast('Tag updated');
+    } else {
+      await createTag(tag);
+      showToast('Tag created');
+    }
+    els.tagModal.close();
+    state.tags = await fetchTags();
+    syncSelectedTags();
+    renderAll();
+  } catch (error) {
+    els.tagError.textContent = error.message;
+  }
+}
+
+async function handleDeleteTag(tagId) {
+  const tag = state.tags.find((item) => item.id === tagId);
+  if (!tag) return;
+
+  const confirmed = window.confirm(
+    `Delete the "${tag.name}" tag? Events using it will keep their color but lose the tag link.`,
+  );
+  if (!confirmed) return;
+
+  try {
+    await deleteTag(tagId);
+    if (els.tagModal.open) els.tagModal.close();
+    state.tags = await fetchTags();
+    syncSelectedTags();
+    await refreshEventsAndRender();
+    showToast('Tag deleted');
+  } catch (error) {
+    if (els.tagModal.open) els.tagError.textContent = error.message;
+    else showToast(error.message);
   }
 }
 

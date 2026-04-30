@@ -11,3 +11,10 @@ export const CATEGORY_COLORS = {
 };
 
 export const CATEGORIES = Object.keys(CATEGORY_COLORS);
+
+export const BUILT_IN_TAGS = CATEGORIES.map((id) => ({
+  id,
+  name: id.charAt(0).toUpperCase() + id.slice(1),
+  color: CATEGORY_COLORS[id],
+  builtIn: true,
+}));

@@ -4,6 +4,23 @@
 alter table public.events
   add column if not exists completed boolean not null default false;
 
+create table if not exists public.tags (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 32),
+  color text not null default '#92c5fc',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, name)
+);
+
+alter table public.events
+  add column if not exists tag_id uuid references public.tags(id) on delete set null;
+
+create index if not exists tags_user_id_idx on public.tags(user_id);
+
+alter table public.tags enable row level security;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
@@ -78,9 +95,83 @@ begin
 end;
 $$;
 
+create or replace function public.can_use_tag(target_tag_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select target_tag_id is null or exists (
+    select 1
+    from public.tags t
+    where t.id = target_tag_id
+      and t.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.touch_tag_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists tags_touch_updated_at on public.tags;
+create trigger tags_touch_updated_at
+before update on public.tags
+for each row execute function public.touch_tag_updated_at();
+
 drop policy if exists "Users can read their own profile" on public.profiles;
 create policy "Users can read their own profile"
 on public.profiles
 for select
 to authenticated
 using (id = auth.uid());
+
+drop policy if exists "Users can read their tags" on public.tags;
+create policy "Users can read their tags"
+on public.tags
+for select
+to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Users can create their tags" on public.tags;
+create policy "Users can create their tags"
+on public.tags
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can update their tags" on public.tags;
+create policy "Users can update their tags"
+on public.tags
+for update
+to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can delete their tags" on public.tags;
+create policy "Users can delete their tags"
+on public.tags
+for delete
+to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Editors can create events" on public.events;
+create policy "Editors can create events"
+on public.events
+for insert
+to authenticated
+with check (public.can_edit_calendar(calendar_id) and public.can_use_tag(tag_id));
+
+drop policy if exists "Editors can update events" on public.events;
+create policy "Editors can update events"
+on public.events
+for update
+to authenticated
+using (public.can_edit_calendar(calendar_id))
+with check (public.can_edit_calendar(calendar_id) and public.can_use_tag(tag_id));
