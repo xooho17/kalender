@@ -4,6 +4,9 @@
 alter table public.events
   add column if not exists completed boolean not null default false;
 
+alter table public.calendars
+  add column if not exists archived_at timestamptz;
+
 create table if not exists public.tags (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,

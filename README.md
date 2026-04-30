@@ -24,7 +24,8 @@ search, filters, and a weekly overview.
 
 The app uses these tables:
 
-- `calendars`: owner-created calendars.
+- `calendars`: owner-created calendars, with optional `archived_at` for hiding
+  calendars without deleting their data.
 - `calendar_members`: access control with `owner`, `collaborator`, and `viewer` roles.
 - `profiles`: a safe public profile table populated from Supabase Auth for email-based sharing.
 - `tags`: user-owned custom tags with names and colors.
@@ -145,6 +146,11 @@ Calendar deletion is handled by deleting a row from `calendars`. Related
 `calendar_members` and `events` rows are cleaned up by `on delete cascade`, and
 RLS allows this only for owners.
 
+Calendar archiving updates `calendars.archived_at`. Archived calendars are
+hidden from the normal calendar list by default and can be shown/restored from
+Settings. If archive or restore fails with a missing column error, run the
+latest `supabase/feature_updates.sql` migration.
+
 ## Local usage
 
 Because the app uses ES modules, serve it with any static server rather than
@@ -166,6 +172,17 @@ the correct scale immediately after login. The main app uses four bottom tabs:
 - Tasks: search, category filters, and weekly event overview.
 - Create: opens the new event form without overlaying the calendar.
 - Settings: calendar selection, sharing, theme, and sign out.
+
+In month view, tapping a day opens a day detail view instead of opening the
+event form immediately. The detail view shows that day's events/tasks, quick
+add, and explicit add event/task actions. Use this flow when testing date
+accuracy because it avoids accidental create actions from simple day selection.
+
+Create and edit use a mobile bottom sheet. Tag selection is an essential field
+in that sheet. Built-in tags save through `events.category`, while custom tags
+save through `events.tag_id`; both paths also update `events.color` as a display
+snapshot. When debugging tag edits, verify all three fields in the returned
+event row.
 
 The app also includes `manifest.webmanifest`, app icons, mobile web app meta
 tags, and a lightweight service worker so it can run as a standalone app when
@@ -200,8 +217,8 @@ check these first:
 - Hard refresh or clear site data after UI patches. Older versions used a
   cache-first service worker, which could keep serving a stale broken shell.
   The current service worker is network-first for app navigation and uses
-  `kalender-shell-v5`. The main CSS and JS links are also versioned with
-  `?v=5` to break stale asset caches after deployment.
+  `kalender-shell-v11`. The main CSS and JS links are also versioned with
+  `?v=11` to break stale asset caches after deployment.
 - Run `supabase/feature_updates.sql` after pulling tag/task updates. If the
   `tags` table is missing, the app now falls back to built-in tags and shows a
   toast instead of aborting, but custom tags will not work until the migration
@@ -213,3 +230,44 @@ The blank-screen regression was caused by fragile initialization around newly
 added backend tables plus stale PWA caching. The app now guards optional tag
 loading and the service worker no longer serves cached HTML before checking the
 network.
+
+## Developer regression checklist
+
+Before deploying a UI or data-flow change, run through this list on a narrow
+mobile viewport and watch the browser console:
+
+- Login and logout with a manually created Supabase user.
+- Confirm Settings shows the signed-in user's email, then log in as another
+  user and verify it updates.
+- Load calendars, switch active calendars, and verify archived calendars are
+  hidden until "Show archived calendars" is enabled.
+- Archive and restore an owned calendar; confirm collaborators/viewers cannot
+  do owner-only actions.
+- Create an event with tag A, edit it to tag B, save, and verify the new
+  tag/color appears in month, week, day, and day detail views.
+- Reopen the edited event and confirm tag B is selected in the bottom sheet.
+- Delete an event and confirm it disappears immediately without refresh.
+- Tap a month date and confirm the day detail view opens for the exact date.
+- Add an event from day detail and confirm the selected date is prefilled.
+- Add a task from day detail, then complete and uncomplete it from Tasks.
+- Create, edit, and delete a custom tag in Settings.
+- Share a calendar by email and verify unknown emails show a friendly error.
+- Switch away from the browser/app and return; confirm data resyncs and
+  realtime subscriptions still work without duplicated updates.
+- Test airplane mode or poor network: the app shell should still load, and data
+  failures should show toasts rather than blank screens.
+- Confirm no horizontal overflow on Calendar, Tasks, Settings, day detail, and
+  all dialogs/bottom sheets.
+- Verify GitHub Pages serves `index.html`, `css/styles.css?v=11`, and
+  `js/app.js?v=11` with HTTP 200.
+
+Common failure modes:
+
+- Tag edits only change visually: inspect the update payload and returned row
+  for `category`, `tag_id`, and `color`.
+- RLS failures on event updates: confirm the user is an owner/collaborator and
+  the referenced custom `tag_id` belongs to the current authenticated user.
+- Archive/restore errors: run the latest feature migration so
+  `calendars.archived_at` exists.
+- Stale UI after deployment: bump the asset query version and service-worker
+  cache name together.

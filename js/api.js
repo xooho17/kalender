@@ -39,13 +39,19 @@ export function onAuthStateChange(callback) {
 }
 
 export async function fetchCalendars() {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('calendar_members')
-    .select('role, calendars(id, name, color, owner_id, created_at)');
+    .select('role, calendars(id, name, color, owner_id, archived_at, created_at)');
+
+  if (error && error.message?.includes('archived_at')) {
+    ({ data, error } = await supabase
+      .from('calendar_members')
+      .select('role, calendars(id, name, color, owner_id, created_at)'));
+  }
 
   if (error) throw error;
   return data
-    .map((row) => ({ ...row.calendars, role: row.role }))
+    .map((row) => ({ archived_at: null, ...row.calendars, role: row.role }))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 }
 
@@ -66,6 +72,18 @@ export async function createCalendar({ name, color }) {
 export async function deleteCalendar(id) {
   const { error } = await supabase.from('calendars').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function updateCalendarArchive(id, archived) {
+  const { data, error } = await supabase
+    .from('calendars')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function fetchTags() {

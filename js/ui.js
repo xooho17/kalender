@@ -31,8 +31,10 @@ export function bindElements() {
     'login-error',
     'email',
     'password',
-    'user-email',
+  'user-email',
+    'account-email',
     'calendar-list',
+    'archived-toggle',
     'category-filters',
     'weekly-overview',
     'event-search',
@@ -115,7 +117,9 @@ export function setActivePanel(panelName) {
 }
 
 export function renderUser() {
-  els.userEmail.textContent = state.session?.user?.email || '';
+  const email = state.session?.user?.email || '';
+  els.userEmail.textContent = email;
+  if (els.accountEmail) els.accountEmail.textContent = email || 'Not signed in';
 }
 
 export function renderAll() {
@@ -124,28 +128,45 @@ export function renderAll() {
   renderCategoryFilters();
   renderCalendar();
   renderWeeklyOverview();
-  renderEventCalendarOptions();
-  renderEventTagOptions();
+  if (!els.eventModal.open) {
+    renderEventCalendarOptions();
+    renderEventTagOptions();
+  }
 }
 
 export function renderCalendars() {
   els.calendarList.innerHTML = '';
-  state.calendars.forEach((calendar) => {
+  if (els.archivedToggle) els.archivedToggle.checked = state.showArchivedCalendars;
+
+  const calendars = state.calendars.filter(
+    (calendar) => state.showArchivedCalendars || !calendar.archived_at,
+  );
+
+  if (!calendars.length) {
+    els.calendarList.innerHTML = '<p class="empty-note">No calendars to show.</p>';
+    return;
+  }
+
+  calendars.forEach((calendar) => {
+    const isArchived = Boolean(calendar.archived_at);
     const item = document.createElement('div');
     item.setAttribute('role', 'button');
     item.tabIndex = 0;
     item.className = `calendar-list-item${
       calendar.id === state.activeCalendarId ? ' active' : ''
-    }`;
+    }${isArchived ? ' archived' : ''}`;
     item.dataset.calendarId = calendar.id;
     item.innerHTML = `
       <span class="calendar-color" style="--calendar-color:${calendar.color}"></span>
       <span class="calendar-name">${escapeHtml(calendar.name)}</span>
-      <span class="role-pill">${calendar.role}</span>
+      <span class="role-pill">${isArchived ? 'archived' : calendar.role}</span>
       ${
         calendar.role === 'owner'
           ? `<span class="calendar-actions">
               <button class="share-affordance" type="button" title="Share calendar">Share</button>
+              <button class="calendar-archive" type="button" title="${isArchived ? 'Restore calendar' : 'Archive calendar'}">
+                ${isArchived ? 'Restore' : 'Archive'}
+              </button>
               <button class="calendar-delete" type="button" title="Delete calendar">Delete</button>
             </span>`
           : ''
@@ -194,11 +215,16 @@ export function renderTags() {
 }
 
 export function renderCalendar() {
-  els.periodTitle.textContent = formatRangeTitle(state.selectedDate, state.view);
   els.viewTabs.forEach((tab) =>
     tab.classList.toggle('active', tab.dataset.view === state.view),
   );
 
+  if (state.dayDetailDate) {
+    renderDayDetail(state.dayDetailDate);
+    return;
+  }
+
+  els.periodTitle.textContent = formatRangeTitle(state.selectedDate, state.view);
   if (state.view === 'month') renderMonth();
   if (state.view === 'week') renderWeek();
   if (state.view === 'day') renderDay();
@@ -239,13 +265,13 @@ export function renderWeeklyOverview() {
 
 }
 
-export function renderEventCalendarOptions() {
+export function renderEventCalendarOptions(selectedCalendarId = state.activeCalendarId) {
   els.eventCalendar.innerHTML = state.calendars
     .map(
       (calendar) =>
         `<option value="${calendar.id}" ${
-          calendar.id === state.activeCalendarId ? 'selected' : ''
-        } ${canEditCalendar(calendar.id) ? '' : 'disabled'}>${escapeHtml(
+          calendar.id === selectedCalendarId ? 'selected' : ''
+        } ${canEditCalendar(calendar.id) && !calendar.archived_at ? '' : 'disabled'}>${escapeHtml(
           calendar.name,
         )}</option>`,
     )
@@ -253,7 +279,11 @@ export function renderEventCalendarOptions() {
 }
 
 export function renderEventTagOptions(selectedTagId = null) {
-  const selected = selectedTagId || els.eventTagId.value || 'work';
+  let selected = selectedTagId || els.eventTagId.value || 'work';
+  if (!findTag(selected)) {
+    els.eventTagId.value = 'work';
+    selected = 'work';
+  }
   els.eventTagOptions.innerHTML = allTags()
     .map(
       (tag) => `
@@ -261,6 +291,7 @@ export function renderEventTagOptions(selectedTagId = null) {
           class="tag-picker-chip ${tag.id === selected ? 'active' : ''}"
           type="button"
           data-tag-id="${tag.id}"
+          aria-pressed="${tag.id === selected ? 'true' : 'false'}"
           style="--tag-color:${tag.color}"
         >
           <span></span>
@@ -271,7 +302,7 @@ export function renderEventTagOptions(selectedTagId = null) {
     .join('');
 }
 
-export function openEventModal(event = null, date = null) {
+export function openEventModal(event = null, date = null, draft = {}) {
   const writableCalendar =
     state.calendars.find((calendar) => calendar.id === state.activeCalendarId && canEditCalendar(calendar.id)) ||
     state.calendars.find((calendar) => canEditCalendar(calendar.id));
@@ -281,21 +312,30 @@ export function openEventModal(event = null, date = null) {
     return;
   }
 
-  const start = event ? new Date(event.starts_at) : defaultStart(date || state.selectedDate);
-  const end = event ? new Date(event.ends_at) : new Date(start.getTime() + 60 * 60 * 1000);
+  const start = event
+    ? new Date(event.starts_at)
+    : draft.starts_at
+      ? new Date(draft.starts_at)
+      : defaultStart(date || state.dayDetailDate || state.selectedDate);
+  const end = event
+    ? new Date(event.ends_at)
+    : draft.ends_at
+      ? new Date(draft.ends_at)
+      : new Date(start.getTime() + 60 * 60 * 1000);
 
   els.eventModalTitle.textContent = event ? 'Edit event' : 'New event';
+  renderEventCalendarOptions(event?.calendar_id || draft.calendar_id || writableCalendar.id);
   els.eventId.value = event?.id || '';
-  els.eventCalendar.value = event?.calendar_id || writableCalendar.id;
-  els.eventTitle.value = event?.title || '';
-  els.eventDescription.value = event?.description || '';
+  els.eventCalendar.value = event?.calendar_id || draft.calendar_id || writableCalendar.id;
+  els.eventTitle.value = event?.title || draft.title || '';
+  els.eventDescription.value = event?.description || draft.description || '';
   els.eventStart.value = toLocalInputValue(start);
   els.eventEnd.value = toLocalInputValue(end);
-  selectEventTag(event ? eventTagKey(event) : 'work');
-  els.eventReminder.checked = Boolean(event?.reminder_minutes);
+  selectEventTag(event ? eventTagKey(event) : draft.tag_id || draft.category || 'work');
+  els.eventReminder.checked = Boolean(event?.reminder_minutes || draft.reminder_minutes);
   const options = els.eventModal.querySelector('.event-options');
   if (options) {
-    options.open = Boolean(event);
+    options.open = Boolean(event && (event.description || event.reminder_minutes));
   }
   els.deleteEventBtn.hidden = !event;
   els.eventError.textContent = '';
@@ -334,6 +374,17 @@ export function selectEventTag(tagId) {
   els.eventCategory.value = tag.builtIn ? tag.id : 'work';
   els.eventColor.value = tag.color;
   renderEventTagOptions(tag.id);
+}
+
+export function openDayDetail(date) {
+  state.dayDetailDate = startOfDay(date);
+  state.selectedDate = startOfDay(date);
+  renderCalendar();
+}
+
+export function closeDayDetail() {
+  state.dayDetailDate = null;
+  renderCalendar();
 }
 
 export function openCalendarModal() {
@@ -418,6 +469,103 @@ function renderMonth() {
     `;
     els.calendarGrid.append(cell);
   });
+}
+
+function renderDayDetail(date) {
+  const selected = startOfDay(date);
+  const dayEvents = visibleEvents().filter((event) => eventOccursOn(event, selected));
+  const activeEvents = dayEvents.filter((event) => !event.completed);
+  const tasks = dayEvents.filter((event) => event.completed || event.title.toLowerCase().startsWith('task:'));
+  const otherEvents = activeEvents.filter((event) => !event.title.toLowerCase().startsWith('task:'));
+  const upcoming = visibleEvents()
+    .filter((event) => new Date(event.starts_at) > endOfDay(selected))
+    .slice(0, 3);
+
+  els.periodTitle.textContent = selected.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  els.calendarGrid.className = 'calendar-grid day-detail';
+  els.calendarGrid.innerHTML = `
+    <section class="day-detail-shell" data-date="${dateKey(selected)}">
+      <header class="day-detail-header">
+        <button class="ghost-action day-detail-back" type="button" data-day-detail-back>Back</button>
+        <div>
+          <p class="eyebrow">Selected day</p>
+          <h2>${selected.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          })}</h2>
+        </div>
+      </header>
+
+      <form class="quick-add" data-quick-add-form>
+        <input
+          data-quick-add-input
+          type="text"
+          placeholder="Quick add: Dentist Friday 14:00"
+          autocomplete="off"
+        />
+        <button class="primary-action" type="submit">Add</button>
+      </form>
+
+      <div class="day-detail-actions">
+        <button class="primary-action" type="button" data-day-add-event>Add event</button>
+        <button class="ghost-action" type="button" data-day-add-task>Add task</button>
+      </div>
+
+      <section class="today-dashboard">
+        <div>
+          <strong>${otherEvents.length}</strong>
+          <span>events</span>
+        </div>
+        <div>
+          <strong>${tasks.length}</strong>
+          <span>tasks</span>
+        </div>
+        <div>
+          <strong>${upcoming.length}</strong>
+          <span>next</span>
+        </div>
+      </section>
+
+      <section class="day-detail-section">
+        <h3>Events</h3>
+        ${renderDayDetailList(otherEvents, 'No events for this day.')}
+      </section>
+
+      <section class="day-detail-section">
+        <h3>Tasks</h3>
+        ${renderDayDetailList(tasks, 'No tasks for this day.')}
+      </section>
+
+      <section class="day-detail-section">
+        <h3>Upcoming</h3>
+        ${renderDayDetailList(upcoming, 'Nothing else coming up.')}
+      </section>
+    </section>
+  `;
+}
+
+function renderDayDetailList(events, emptyText) {
+  if (!events.length) return `<p class="empty-note">${emptyText}</p>`;
+  return `
+    <div class="day-detail-list">
+      ${events
+        .map(
+          (event) => `
+            <button class="day-detail-item ${event.completed ? 'completed' : ''}" type="button" data-event-id="${event.id}">
+              <span style="--event-color:${eventColor(event)}"></span>
+              <strong>${escapeHtml(event.title)}</strong>
+              <small>${formatEventTime(event)} - ${escapeHtml(eventTagLabel(event))}</small>
+            </button>
+          `,
+        )
+        .join('')}
+    </div>
+  `;
 }
 
 function renderWeek() {
@@ -547,7 +695,11 @@ function formatEventTime(event) {
 }
 
 function eventColor(event) {
-  return findTag(event.tag_id)?.color || event.color;
+  return findTag(event.tag_id)?.color || findTag(event.category)?.color || event.color;
+}
+
+function eventTagLabel(event) {
+  return findTag(event.tag_id)?.name || findTag(event.category)?.name || 'Tag';
 }
 
 function eventPillClass(event, day) {

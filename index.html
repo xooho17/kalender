@@ -22,7 +22,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=10" />
+    <link rel="stylesheet" href="css/styles.css?v=11" />
   </head>
   <body>
     <main id="app" class="app-shell">
@@ -105,6 +105,10 @@
               <p class="eyebrow">Account</p>
               <h1>Settings</h1>
             </header>
+            <section class="account-card" aria-label="Signed in account">
+              <span>Signed in as</span>
+              <strong id="account-email"></strong>
+            </section>
             <section class="side-section">
               <div class="section-heading">
                 <h2>Calendars</h2>
@@ -112,6 +116,10 @@
                   +
                 </button>
               </div>
+              <label class="archive-toggle">
+                <input id="archived-toggle" type="checkbox" />
+                <span>Show archived calendars</span>
+              </label>
               <div id="calendar-list" class="calendar-list"></div>
             </section>
             <section class="side-section tags-section">
@@ -174,8 +182,13 @@
           </label>
         </div>
 
+        <label class="tag-picker-label">
+          Tag
+          <span id="event-tag-options" class="tag-picker"></span>
+        </label>
+
         <details class="event-options">
-          <summary>Options</summary>
+          <summary>More options</summary>
           <label>
             Calendar
             <select id="event-calendar" required></select>
@@ -184,12 +197,6 @@
             Notes
             <textarea id="event-description" rows="2"></textarea>
           </label>
-          <div class="form-grid">
-            <label class="tag-picker-label">
-              Tag
-              <span id="event-tag-options" class="tag-picker"></span>
-            </label>
-          </div>
           <input id="event-category" type="hidden" value="work" />
           <input id="event-tag-id" type="hidden" />
           <input id="event-color" type="hidden" value="#92c5fc" />
@@ -297,6 +304,6 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script type="module" src="js/app.js?v=10"></script>
+    <script type="module" src="js/app.js?v=11"></script>
   </body>
 </html>

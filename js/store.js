@@ -7,8 +7,10 @@ export const state = {
   events: [],
   tags: [],
   selectedDate: new Date(),
+  dayDetailDate: null,
   view: 'month',
   search: '',
+  showArchivedCalendars: false,
   selectedCategories: new Set(['work', 'personal', 'urgent', 'focus', 'travel']),
   realtimeChannel: null,
 };

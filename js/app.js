@@ -16,6 +16,7 @@ import {
   signIn,
   signOut,
   subscribeToEvents,
+  updateCalendarArchive,
   updateTag,
 } from './api.js';
 import { addDays, addMonths, dateKey, startOfDay, startOfMonthGrid, startOfWeek } from './dateUtils.js';
@@ -23,7 +24,9 @@ import { canEditCalendar, state, syncSelectedTags } from './store.js';
 import {
   bindElements,
   elements,
+  closeDayDetail,
   openCalendarModal,
+  openDayDetail,
   openEventModal,
   openTagModal,
   openShareModal,
@@ -71,6 +74,7 @@ async function boot() {
       state.calendars = [];
       state.events = [];
       state.tags = [];
+      renderUser();
       await removeChannel(state.realtimeChannel);
       state.realtimeChannel = null;
     }
@@ -104,6 +108,7 @@ function bindUiEvents() {
   els.prevBtn.addEventListener('click', () => movePeriod(-1));
   els.todayBtn.addEventListener('click', () => {
     state.selectedDate = new Date();
+    state.dayDetailDate = null;
     refreshEventsAndRender();
   });
   els.nextBtn.addEventListener('click', () => movePeriod(1));
@@ -111,6 +116,7 @@ function bindUiEvents() {
   els.viewTabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       state.view = tab.dataset.view;
+      state.dayDetailDate = null;
       refreshEventsAndRender();
     });
   });
@@ -139,6 +145,15 @@ function bindUiEvents() {
     }
   });
 
+  if (els.archivedToggle) {
+    els.archivedToggle.addEventListener('change', async () => {
+      state.showArchivedCalendars = els.archivedToggle.checked;
+      renderCalendars();
+      await setupRealtime();
+      await refreshEventsAndRender();
+    });
+  }
+
   els.eventTagOptions.addEventListener('click', (event) => {
     const chip = event.target.closest('[data-tag-id]');
     if (!chip) return;
@@ -148,6 +163,7 @@ function bindUiEvents() {
   els.calendarList.addEventListener('click', (event) => {
     const shareTarget = event.target.closest('.share-affordance');
     const deleteTarget = event.target.closest('.calendar-delete');
+    const archiveTarget = event.target.closest('.calendar-archive');
     const item = event.target.closest('.calendar-list-item');
     if (!item) return;
     if (shareTarget) {
@@ -156,6 +172,15 @@ function bindUiEvents() {
     }
     if (deleteTarget) {
       handleDeleteCalendar(item.dataset.calendarId);
+      return;
+    }
+    if (archiveTarget) {
+      handleArchiveCalendar(item.dataset.calendarId);
+      return;
+    }
+    const calendar = state.calendars.find((entry) => entry.id === item.dataset.calendarId);
+    if (calendar?.archived_at) {
+      showToast('Restore this calendar before selecting it.');
       return;
     }
     state.activeCalendarId =
@@ -190,6 +215,23 @@ function bindUiEvents() {
   });
 
   els.calendarGrid.addEventListener('click', (event) => {
+    if (event.target.closest('[data-day-detail-back]')) {
+      closeDayDetail();
+      return;
+    }
+
+    if (event.target.closest('[data-day-add-event]')) {
+      openEventModal(null, state.dayDetailDate || state.selectedDate);
+      return;
+    }
+
+    if (event.target.closest('[data-day-add-task]')) {
+      openEventModal(null, state.dayDetailDate || state.selectedDate, {
+        title: 'Task: ',
+      });
+      return;
+    }
+
     const eventButton = event.target.closest('[data-event-id]');
     if (eventButton) {
       const calendarEvent = state.events.find((item) => item.id === eventButton.dataset.eventId);
@@ -198,7 +240,21 @@ function bindUiEvents() {
     }
 
     const dated = event.target.closest('[data-date]');
-    if (dated) openEventModal(null, new Date(`${dated.dataset.date}T00:00:00`));
+    if (dated) openDayDetail(new Date(`${dated.dataset.date}T00:00:00`));
+  });
+
+  els.calendarGrid.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-quick-add-form]');
+    if (!form) return;
+    event.preventDefault();
+    const input = form.querySelector('[data-quick-add-input]');
+    const draft = parseQuickAdd(input.value, state.dayDetailDate || state.selectedDate);
+    if (!draft.title) {
+      showToast('Add a title to quick-add.');
+      return;
+    }
+    input.value = '';
+    openEventModal(null, new Date(draft.starts_at), draft);
   });
 
   els.calendarGrid.addEventListener('dragstart', (event) => {
@@ -246,7 +302,7 @@ async function loadWorkspace() {
   state.calendars = calendars;
   state.tags = tags;
   syncSelectedTags();
-  state.activeCalendarId = state.calendars[0]?.id || null;
+  state.activeCalendarId = state.calendars.find((calendar) => !calendar.archived_at)?.id || null;
   setActivePanel('calendar');
   await setupRealtime();
   await refreshEventsAndRender();
@@ -273,7 +329,9 @@ async function loadTagsSafely() {
 async function refreshEventsAndRender() {
   const requestId = ++refreshRequestId;
   const [rangeStart, rangeEnd] = eventRangeForView();
-  const calendarIds = state.calendars.map((calendar) => calendar.id);
+  const calendarIds = state.calendars
+    .filter((calendar) => !calendar.archived_at || state.showArchivedCalendars)
+    .map((calendar) => calendar.id);
   if (!calendarIds.length) {
     state.events = [];
     renderAll();
@@ -293,8 +351,11 @@ async function refreshEventsAndRender() {
 
 async function setupRealtime() {
   await removeChannel(state.realtimeChannel);
+  const calendarIds = state.calendars
+    .filter((calendar) => !calendar.archived_at || state.showArchivedCalendars)
+    .map((calendar) => calendar.id);
   state.realtimeChannel = subscribeToEvents(
-    state.calendars.map((calendar) => calendar.id),
+    calendarIds,
     async () => {
       await refreshEventsAndRender();
       showToast('Calendar updated');
@@ -316,6 +377,12 @@ function eventRangeForView() {
 }
 
 function movePeriod(direction) {
+  if (state.dayDetailDate) {
+    state.dayDetailDate = addDays(state.dayDetailDate, direction);
+    state.selectedDate = state.dayDetailDate;
+    refreshEventsAndRender();
+    return;
+  }
   if (state.view === 'month') state.selectedDate = addMonths(state.selectedDate, direction);
   if (state.view === 'week') state.selectedDate = addDays(state.selectedDate, direction * 7);
   if (state.view === 'day') state.selectedDate = addDays(state.selectedDate, direction);
@@ -327,18 +394,42 @@ async function handleEventSubmit(event) {
   if (eventSaveInFlight) return;
   els.eventError.textContent = '';
   eventSaveInFlight = true;
+  let previousEvents = null;
   try {
     const payload = readEventForm();
     if (!canEditCalendar(payload.calendar_id)) {
       throw new Error('You do not have permission to edit this calendar.');
     }
     setFormBusy(els.eventForm, true);
-    await saveEvent(payload);
+    previousEvents = state.events;
+    const temporaryId = payload.id || `tmp-${Date.now()}`;
+    const optimisticEvent = {
+      ...payload,
+      id: temporaryId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    refreshRequestId += 1;
+    state.events = payload.id
+      ? state.events.map((item) => (item.id === payload.id ? { ...item, ...payload } : item))
+      : [...state.events, optimisticEvent];
+    renderAll();
+    setFormBusy(els.eventForm, true);
+
+    const saved = await saveEvent(payload);
+    state.events = state.events.map((item) =>
+      item.id === temporaryId || item.id === saved.id ? saved : item,
+    );
     els.eventModal.close();
     await refreshEventsAndRender();
     showToast('Event saved');
   } catch (error) {
+    if (previousEvents) {
+      state.events = previousEvents;
+      renderAll();
+    }
     els.eventError.textContent = error.message;
+    showToast('Event could not be saved.');
   } finally {
     eventSaveInFlight = false;
     setFormBusy(els.eventForm, false);
@@ -474,6 +565,34 @@ async function handleDeleteCalendar(calendarId) {
   }
 }
 
+async function handleArchiveCalendar(calendarId) {
+  const calendar = state.calendars.find((item) => item.id === calendarId);
+  if (!calendar || calendar.role !== 'owner') return;
+
+  const archived = !calendar.archived_at;
+  const previousCalendars = state.calendars;
+  const nextArchivedAt = archived ? new Date().toISOString() : null;
+  state.calendars = state.calendars.map((item) =>
+    item.id === calendarId ? { ...item, archived_at: nextArchivedAt } : item,
+  );
+  if (archived && state.activeCalendarId === calendarId) {
+    state.activeCalendarId = state.calendars.find((item) => !item.archived_at)?.id || null;
+  }
+  renderAll();
+
+  try {
+    await updateCalendarArchive(calendarId, archived);
+    await loadWorkspace();
+    state.showArchivedCalendars = archived || state.showArchivedCalendars;
+    renderAll();
+    showToast(archived ? 'Calendar archived' : 'Calendar restored');
+  } catch (error) {
+    state.calendars = previousCalendars;
+    renderAll();
+    showToast(error.message?.includes('archived_at') ? 'Run the calendar archive migration.' : error.message);
+  }
+}
+
 async function handleToggleComplete(eventId) {
   const event = state.events.find((item) => item.id === eventId);
   if (!event) return;
@@ -535,6 +654,71 @@ function syncThemeButton() {
     document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
 }
 
+function parseQuickAdd(value, fallbackDate) {
+  const raw = value.trim();
+  if (!raw) return {};
+
+  const now = new Date();
+  let date = startOfDay(fallbackDate || now);
+  let title = raw;
+  const lower = raw.toLowerCase();
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  if (lower.includes('tomorrow')) {
+    date = startOfDay(addDays(now, 1));
+    title = removeToken(title, 'tomorrow');
+  } else if (lower.includes('today')) {
+    date = startOfDay(now);
+    title = removeToken(title, 'today');
+  } else {
+    const namedDay = dayNames.find((day) => lower.includes(day));
+    if (namedDay) {
+      const target = dayNames.indexOf(namedDay);
+      const current = now.getDay();
+      const offset = (target - current + 7) % 7 || 7;
+      date = startOfDay(addDays(now, offset));
+      title = removeToken(title, namedDay);
+    }
+  }
+
+  const timeRange = title.match(/\b(\d{1,2})(?::(\d{2}))?\s*(?:-|to)\s*(\d{1,2})(?::(\d{2}))?\b/i);
+  const singleTime = title.match(/\b(\d{1,2})(?::(\d{2}))\b/);
+  let startHour = 9;
+  let startMinute = 0;
+  let endHour = 10;
+  let endMinute = 0;
+
+  if (timeRange) {
+    startHour = Number(timeRange[1]);
+    startMinute = Number(timeRange[2] || 0);
+    endHour = Number(timeRange[3]);
+    endMinute = Number(timeRange[4] || 0);
+    title = title.replace(timeRange[0], '');
+  } else if (singleTime) {
+    startHour = Number(singleTime[1]);
+    startMinute = Number(singleTime[2]);
+    endHour = startHour + 1;
+    endMinute = startMinute;
+    title = title.replace(singleTime[0], '');
+  }
+
+  const start = new Date(date);
+  start.setHours(startHour, startMinute, 0, 0);
+  const end = new Date(date);
+  end.setHours(endHour, endMinute, 0, 0);
+  if (end <= start) end.setTime(start.getTime() + 60 * 60 * 1000);
+
+  return {
+    title: title.replace(/\s+/g, ' ').trim(),
+    starts_at: start.toISOString(),
+    ends_at: end.toISOString(),
+  };
+}
+
+function removeToken(value, token) {
+  return value.replace(new RegExp(`\\b${token}\\b`, 'i'), '').trim();
+}
+
 function bindSwipeNavigation() {
   let startX = 0;
   let startY = 0;
@@ -575,6 +759,11 @@ function bindLifecycleEvents() {
     if (document.visibilityState === 'visible') recoverAfterResume();
   });
   window.addEventListener('focus', recoverAfterResume);
+  window.addEventListener('offline', () => showToast('Offline. Changes will need a connection.'));
+  window.addEventListener('online', () => {
+    showToast('Back online. Syncing...');
+    recoverAfterResume();
+  });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) recoverAfterResume();
   });
