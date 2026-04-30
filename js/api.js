@@ -49,15 +49,18 @@ export async function createCalendar({ name, color }) {
   return data;
 }
 
-export async function shareCalendar({ calendar_id, user_id, role }) {
+export async function deleteCalendar(id) {
+  const { error } = await supabase.from('calendars').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function shareCalendar({ calendar_id, email, role }) {
   const { data, error } = await supabase
-    .from('calendar_members')
-    .upsert(
-      { calendar_id, user_id, role },
-      { onConflict: 'calendar_id,user_id' },
-    )
-    .select()
-    .single();
+    .rpc('share_calendar_by_email', {
+      target_calendar_id: calendar_id,
+      target_email: email,
+      target_role: role,
+    });
 
   if (error) throw error;
   return data;
@@ -88,6 +91,7 @@ export async function saveEvent(event) {
     color: event.color,
     category: event.category,
     reminder_minutes: event.reminder_minutes,
+    completed: Boolean(event.completed),
   };
 
   if (event.id) {
@@ -114,6 +118,18 @@ export async function saveEvent(event) {
 export async function deleteEvent(id) {
   const { error } = await supabase.from('events').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function setEventCompleted(id, completed) {
+  const { data, error } = await supabase
+    .from('events')
+    .update({ completed })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export function subscribeToEvents(calendarIds, callback) {

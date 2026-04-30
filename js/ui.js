@@ -110,8 +110,9 @@ export function renderAll() {
 export function renderCalendars() {
   els.calendarList.innerHTML = '';
   state.calendars.forEach((calendar) => {
-    const item = document.createElement('button');
-    item.type = 'button';
+    const item = document.createElement('div');
+    item.setAttribute('role', 'button');
+    item.tabIndex = 0;
     item.className = `calendar-list-item${
       calendar.id === state.activeCalendarId ? ' active' : ''
     }`;
@@ -122,7 +123,10 @@ export function renderCalendars() {
       <span class="role-pill">${calendar.role}</span>
       ${
         calendar.role === 'owner'
-          ? '<span class="share-affordance" title="Share calendar">Share</span>'
+          ? `<span class="calendar-actions">
+              <button class="share-affordance" type="button" title="Share calendar">Share</button>
+              <button class="calendar-delete" type="button" title="Delete calendar">Delete</button>
+            </span>`
           : ''
       }
     `;
@@ -172,11 +176,20 @@ export function renderWeeklyOverview() {
       : upcoming
           .map(
             (event) => `
-              <button class="overview-event" type="button" data-event-id="${event.id}">
+              <div class="overview-event ${event.completed ? 'completed' : ''}">
                 <span style="--event-color:${event.color}"></span>
-                <strong>${escapeHtml(event.title)}</strong>
-                <small>${formatEventTime(event)}</small>
-              </button>
+                <button
+                  class="task-check"
+                  type="button"
+                  data-complete-event-id="${event.id}"
+                  aria-label="${event.completed ? 'Mark incomplete' : 'Mark complete'}"
+                  aria-pressed="${event.completed ? 'true' : 'false'}"
+                ></button>
+                <button class="overview-main" type="button" data-event-id="${event.id}">
+                  <strong>${escapeHtml(event.title)}</strong>
+                  <small>${formatEventTime(event)}</small>
+                </button>
+              </div>
             `,
           )
           .join('');
@@ -233,6 +246,7 @@ export function openEventModal(event = null, date = null) {
 
 export function readEventForm() {
   const id = els.eventId.value || null;
+  const existingEvent = id ? state.events.find((event) => event.id === id) : null;
   const startsAt = fromLocalInputValue(els.eventStart.value);
   const endsAt = fromLocalInputValue(els.eventEnd.value);
 
@@ -250,6 +264,7 @@ export function readEventForm() {
     category: els.eventCategory.value,
     color: els.eventColor.value,
     reminder_minutes: els.eventReminder.checked ? 15 : null,
+    completed: Boolean(existingEvent?.completed),
   };
 }
 
@@ -266,6 +281,8 @@ export function openShareModal(calendarId) {
   els.shareTitle.textContent = `Share ${calendar.name}`;
   els.shareCalendarId.value = calendarId;
   els.shareUserId.value = '';
+  els.shareUserId.type = 'email';
+  els.shareUserId.placeholder = 'person@example.com';
   els.shareRole.value = 'collaborator';
   els.shareError.textContent = '';
   els.shareModal.showModal();
@@ -319,10 +336,55 @@ function renderWeek() {
   const start = startOfWeek(state.selectedDate);
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
 
+  if (window.matchMedia('(max-width: 719px)').matches) {
+    els.calendarGrid.className = 'calendar-grid week-list';
+    els.calendarGrid.innerHTML = days.map(renderWeekListDay).join('');
+    return;
+  }
+
   els.calendarGrid.className = 'calendar-grid time-grid';
   els.calendarGrid.innerHTML = days
     .map((day) => renderTimeColumn(day, day.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })))
     .join('');
+}
+
+function renderWeekListDay(day) {
+  const dayEvents = visibleEvents().filter((event) => eventOccursOn(event, day));
+  const label = day.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return `
+    <section class="week-list-day" data-date="${dateKey(day)}">
+      <header>
+        <strong>${label}</strong>
+        <span>${dayEvents.length || 'No'} event${dayEvents.length === 1 ? '' : 's'}</span>
+      </header>
+      <div class="week-list-events">
+        ${
+          dayEvents.length
+            ? dayEvents
+                .map(
+                  (event) => `
+                    <button
+                      class="week-list-event ${event.completed ? 'completed' : ''}"
+                      type="button"
+                      data-event-id="${event.id}"
+                    >
+                      <span style="--event-color:${event.color}"></span>
+                      <strong>${escapeHtml(event.title)}</strong>
+                      <small>${formatEventTime(event)}</small>
+                    </button>
+                  `,
+                )
+                .join('')
+            : '<p class="empty-note">Tap to add an event.</p>'
+        }
+      </div>
+    </section>
+  `;
 }
 
 function renderDay() {

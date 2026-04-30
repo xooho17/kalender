@@ -26,7 +26,8 @@ The app uses these tables:
 
 - `calendars`: owner-created calendars.
 - `calendar_members`: access control with `owner`, `collaborator`, and `viewer` roles.
-- `events`: shared events with title, description, time range, color, category, and optional reminder.
+- `profiles`: a safe public profile table populated from Supabase Auth for email-based sharing.
+- `events`: shared events with title, description, time range, color, category, completion state, and optional reminder.
 
 RLS ensures users can only read calendars they belong to. Owners can share
 calendars, owners and collaborators can modify events, and viewers can only read.
@@ -74,6 +75,9 @@ The policies are:
 - `events SELECT`: calendar members can read events.
 - `events INSERT/UPDATE/DELETE`: owners and collaborators can modify events;
   viewers cannot.
+- `profiles SELECT`: users can read only their own profile. Calendar sharing by
+  email happens through the `share_calendar_by_email` RPC, which checks that the
+  caller owns the calendar before resolving the target email.
 
 Helper functions such as `is_calendar_member`, `is_calendar_owner`, and
 `can_edit_calendar` are `security definer` functions so policies can check
@@ -115,9 +119,22 @@ When changing schema or policies later, keep these rules intact:
 ## Sharing calendars
 
 Open the share action beside an owned calendar and enter the target user's
-Supabase Auth user ID. Supabase Auth does not expose other users by email to the
-browser with a publishable key, so sharing by user ID avoids adding a privileged
-backend service.
+email address. The browser calls the `share_calendar_by_email` RPC instead of
+reading `auth.users` directly. The function resolves the email through
+`profiles`, rejects unknown emails, and grants `viewer` or `collaborator`
+membership only if the caller is the calendar owner.
+
+## Feature migrations
+
+For an existing Supabase project, run these SQL files in order as needed:
+
+1. `supabase/rls_fix_calendars.sql` if calendar creation is blocked by RLS.
+2. `supabase/feature_updates.sql` to add task completion, email sharing, and
+   the profile sync trigger.
+
+Calendar deletion is handled by deleting a row from `calendars`. Related
+`calendar_members` and `events` rows are cleaned up by `on delete cascade`, and
+RLS allows this only for owners.
 
 ## Local usage
 

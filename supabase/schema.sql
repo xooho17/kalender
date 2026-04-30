@@ -27,6 +27,12 @@ create table public.calendar_members (
   primary key (calendar_id, user_id)
 );
 
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  created_at timestamptz not null default now()
+);
+
 create table public.events (
   id uuid primary key default gen_random_uuid(),
   calendar_id uuid not null references public.calendars(id) on delete cascade,
@@ -36,6 +42,7 @@ create table public.events (
   ends_at timestamptz not null,
   color text not null default '#92c5fc',
   category text not null default 'work',
+  completed boolean not null default false,
   reminder_minutes integer,
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
   updated_by uuid default auth.uid() references auth.users(id) on delete set null,
@@ -48,6 +55,7 @@ create table public.events (
 
 create index calendars_owner_id_idx on public.calendars(owner_id);
 create index calendar_members_user_id_idx on public.calendar_members(user_id);
+create index profiles_email_idx on public.profiles(lower(email));
 create index events_calendar_time_idx on public.events(calendar_id, starts_at, ends_at);
 
 alter table public.calendars
@@ -55,6 +63,7 @@ alter table public.calendars
 
 alter table public.calendars enable row level security;
 alter table public.calendar_members enable row level security;
+alter table public.profiles enable row level security;
 alter table public.events enable row level security;
 
 create or replace function public.is_calendar_member(target_calendar_id uuid)
@@ -129,6 +138,70 @@ begin
 end;
 $$;
 
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles(id, email)
+  values (new.id, lower(new.email))
+  on conflict (id) do update set email = excluded.email;
+  return new;
+end;
+$$;
+
+create or replace function public.share_calendar_by_email(
+  target_calendar_id uuid,
+  target_email text,
+  target_role public.calendar_role
+)
+returns public.calendar_members
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_user_id uuid;
+  membership public.calendar_members;
+begin
+  if target_role = 'owner' then
+    raise exception 'Cannot grant owner role through sharing';
+  end if;
+
+  if not public.is_calendar_owner(target_calendar_id) then
+    raise exception 'Only calendar owners can share calendars';
+  end if;
+
+  select p.id into target_user_id
+  from public.profiles p
+  where p.email = lower(trim(target_email));
+
+  if target_user_id is null then
+    raise exception 'No user found for email %', target_email;
+  end if;
+
+  insert into public.calendar_members(calendar_id, user_id, role)
+  values (target_calendar_id, target_user_id, target_role)
+  on conflict (calendar_id, user_id) do update set role = excluded.role
+  returning * into membership;
+
+  return membership;
+end;
+$$;
+
+drop trigger if exists auth_users_profile on auth.users;
+create trigger auth_users_profile
+after insert or update of email on auth.users
+for each row execute function public.handle_new_user_profile();
+
+insert into public.profiles(id, email)
+select id, lower(email)
+from auth.users
+where email is not null
+on conflict (id) do update set email = excluded.email;
+
 drop trigger if exists events_touch_updated_at on public.events;
 create trigger events_touch_updated_at
 before update on public.events
@@ -174,6 +247,13 @@ on public.calendar_members
 for select
 to authenticated
 using (user_id = auth.uid() or public.is_calendar_owner(calendar_id));
+
+drop policy if exists "Users can read their own profile" on public.profiles;
+create policy "Users can read their own profile"
+on public.profiles
+for select
+to authenticated
+using (id = auth.uid());
 
 drop policy if exists "Owners can share calendars" on public.calendar_members;
 create policy "Owners can share calendars"

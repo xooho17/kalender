@@ -81,7 +81,11 @@ export function formatRangeTitle(date, view) {
 }
 
 export function dateKey(date) {
-  return startOfDay(date).toISOString().slice(0, 10);
+  const local = startOfDay(date);
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(
+    local.getDate(),
+  )}`;
 }
 
 export function eventOccursOn(event, date) {

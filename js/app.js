@@ -1,5 +1,6 @@
 import {
   createCalendar,
+  deleteCalendar,
   deleteEvent,
   fetchCalendars,
   fetchEvents,
@@ -7,6 +8,7 @@ import {
   onAuthStateChange,
   removeChannel,
   saveEvent,
+  setEventCompleted,
   shareCalendar,
   signIn,
   signOut,
@@ -123,12 +125,27 @@ function bindUiEvents() {
 
   els.calendarList.addEventListener('click', (event) => {
     const shareTarget = event.target.closest('.share-affordance');
+    const deleteTarget = event.target.closest('.calendar-delete');
     const item = event.target.closest('.calendar-list-item');
     if (!item) return;
     if (shareTarget) {
       openShareModal(item.dataset.calendarId);
       return;
     }
+    if (deleteTarget) {
+      handleDeleteCalendar(item.dataset.calendarId);
+      return;
+    }
+    state.activeCalendarId =
+      state.activeCalendarId === item.dataset.calendarId ? null : item.dataset.calendarId;
+    renderAll();
+  });
+
+  els.calendarList.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    const item = event.target.closest('.calendar-list-item');
+    if (!item || event.target.closest('button')) return;
+    event.preventDefault();
     state.activeCalendarId =
       state.activeCalendarId === item.dataset.calendarId ? null : item.dataset.calendarId;
     renderAll();
@@ -158,6 +175,12 @@ function bindUiEvents() {
   bindSwipeNavigation();
 
   els.weeklyOverview.addEventListener('click', (event) => {
+    const completeButton = event.target.closest('[data-complete-event-id]');
+    if (completeButton) {
+      handleToggleComplete(completeButton.dataset.completeEventId);
+      return;
+    }
+
     const eventButton = event.target.closest('[data-event-id]');
     if (!eventButton) return;
     const calendarEvent = state.events.find((item) => item.id === eventButton.dataset.eventId);
@@ -282,13 +305,48 @@ async function handleShareCalendar(event) {
   try {
     await shareCalendar({
       calendar_id: els.shareCalendarId.value,
-      user_id: els.shareUserId.value.trim(),
+      email: els.shareUserId.value.trim(),
       role: els.shareRole.value,
     });
     els.shareModal.close();
     showToast('Calendar shared');
   } catch (error) {
     els.shareError.textContent = error.message;
+  }
+}
+
+async function handleDeleteCalendar(calendarId) {
+  const calendar = state.calendars.find((item) => item.id === calendarId);
+  if (!calendar || calendar.role !== 'owner') return;
+
+  const confirmed = window.confirm(
+    `Delete "${calendar.name}" and all of its events? This cannot be undone.`,
+  );
+  if (!confirmed) return;
+
+  try {
+    await deleteCalendar(calendarId);
+    if (state.activeCalendarId === calendarId) state.activeCalendarId = null;
+    await loadWorkspace();
+    showToast('Calendar deleted');
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function handleToggleComplete(eventId) {
+  const event = state.events.find((item) => item.id === eventId);
+  if (!event) return;
+  if (!canEditCalendar(event.calendar_id)) {
+    showToast('You do not have permission to update this task.');
+    return;
+  }
+
+  try {
+    await setEventCompleted(eventId, !event.completed);
+    await refreshEventsAndRender();
+  } catch (error) {
+    showToast(error.message);
   }
 }
 
