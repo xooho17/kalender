@@ -234,7 +234,7 @@ function bindUiEvents() {
 
 async function loadWorkspace() {
   renderUser();
-  const [calendars, tags] = await Promise.all([fetchCalendars(), fetchTags()]);
+  const [calendars, tags] = await Promise.all([loadCalendarsSafely(), loadTagsSafely()]);
   state.calendars = calendars;
   state.tags = tags;
   syncSelectedTags();
@@ -242,6 +242,24 @@ async function loadWorkspace() {
   setActivePanel('calendar');
   await setupRealtime();
   await refreshEventsAndRender();
+}
+
+async function loadCalendarsSafely() {
+  try {
+    return await fetchCalendars();
+  } catch (error) {
+    showToast('Calendar data could not be loaded. Check Supabase setup.');
+    return [];
+  }
+}
+
+async function loadTagsSafely() {
+  try {
+    return await fetchTags();
+  } catch (error) {
+    showToast('Custom tags need the latest Supabase migration.');
+    return [];
+  }
 }
 
 async function refreshEventsAndRender() {

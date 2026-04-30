@@ -188,3 +188,28 @@ calendar grid to render too wide after login.
 6. Add that Pages URL in Supabase Authentication URL configuration.
 
 No build step is required.
+
+## Troubleshooting Blank Screens
+
+If GitHub Pages shows only a plain repository title or an empty white page,
+check these first:
+
+- Confirm `index.html`, `css/styles.css`, and `js/app.js` load with HTTP 200
+  from the deployed Pages URL. All app paths are repository-relative, so avoid
+  changing them to root paths like `/js/app.js`.
+- Hard refresh or clear site data after UI patches. Older versions used a
+  cache-first service worker, which could keep serving a stale broken shell.
+  The current service worker is network-first for app navigation and uses
+  `kalender-shell-v5`. The main CSS and JS links are also versioned with
+  `?v=5` to break stale asset caches after deployment.
+- Run `supabase/feature_updates.sql` after pulling tag/task updates. If the
+  `tags` table is missing, the app now falls back to built-in tags and shows a
+  toast instead of aborting, but custom tags will not work until the migration
+  is applied.
+- Test locally before deployment with `node server.mjs`, then open
+  `http://127.0.0.1:4173/` and verify the browser console has no new errors.
+
+The blank-screen regression was caused by fragile initialization around newly
+added backend tables plus stale PWA caching. The app now guards optional tag
+loading and the service worker no longer serves cached HTML before checking the
+network.

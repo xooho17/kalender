@@ -16,7 +16,10 @@ export async function signOut() {
 
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
+  if (error) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return null;
+  }
   return data.session;
 }
 
