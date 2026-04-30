@@ -295,10 +295,7 @@ export function openEventModal(event = null, date = null) {
   els.eventReminder.checked = Boolean(event?.reminder_minutes);
   const options = els.eventModal.querySelector('.event-options');
   if (options) {
-    options.open = Boolean(
-      event &&
-        (event.description || event.reminder_minutes || event.category !== 'work'),
-    );
+    options.open = Boolean(event);
   }
   els.deleteEventBtn.hidden = !event;
   els.eventError.textContent = '';

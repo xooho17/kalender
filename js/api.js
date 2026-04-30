@@ -20,7 +20,18 @@ export async function getSession() {
     await supabase.auth.signOut({ scope: 'local' });
     return null;
   }
-  return data.session;
+  if (!data.session) return null;
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return null;
+  }
+
+  return {
+    ...data.session,
+    user: userData.user,
+  };
 }
 
 export function onAuthStateChange(callback) {

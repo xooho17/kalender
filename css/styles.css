@@ -74,6 +74,13 @@ textarea {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 input,
@@ -88,7 +95,10 @@ button {
 }
 
 .app-shell {
+  width: 100%;
+  max-width: 100%;
   min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 .login-view {
@@ -247,12 +257,16 @@ textarea:focus {
   inset: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) calc(var(--tab-height) + var(--safe-bottom));
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   background: var(--surface);
 }
 
 .app-panels {
   position: relative;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -263,8 +277,11 @@ textarea:focus {
   inset: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateX(12px);
@@ -281,6 +298,7 @@ textarea:focus {
 
 .utility-panel {
   grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow-x: hidden;
   overflow-y: auto;
   padding: calc(18px + env(safe-area-inset-top, 0px)) 16px 104px;
 }
@@ -374,6 +392,8 @@ textarea:focus {
 }
 
 .calendar-grid {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
   margin: 0;
@@ -416,6 +436,7 @@ textarea:focus {
   color: var(--ink);
   padding: 5px 3px 4px;
   text-align: center;
+  touch-action: manipulation;
 }
 
 .month-cell:nth-child(7n) {
@@ -501,6 +522,7 @@ textarea:focus {
   grid-auto-columns: 100%;
   overflow-x: auto;
   overflow-y: auto;
+  overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
@@ -583,6 +605,10 @@ textarea:focus {
   display: grid;
   align-content: start;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 8px 14px 18px;
 }
@@ -590,6 +616,7 @@ textarea:focus {
 .week-list-day {
   display: grid;
   gap: 8px;
+  min-width: 0;
   border-radius: 18px;
   background: var(--surface-2);
   padding: 12px;
@@ -629,6 +656,7 @@ textarea:focus {
   color: var(--ink);
   padding: 8px 10px;
   text-align: left;
+  touch-action: manipulation;
 }
 
 .week-list-event > span {
@@ -694,12 +722,16 @@ textarea:focus {
 .weekly-overview {
   display: grid;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .calendar-list-item,
 .overview-event {
   display: grid;
   width: 100%;
+  min-width: 0;
   border: 0;
   border-radius: 16px;
   background: var(--surface);
@@ -753,7 +785,7 @@ textarea:focus {
 
 .share-affordance,
 .calendar-delete {
-  min-height: 32px;
+  min-height: 40px;
   border: 0;
   border-radius: 999px;
   padding: 0 10px;
@@ -772,6 +804,9 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .category-chip {
@@ -808,6 +843,9 @@ textarea:focus {
 .tag-list {
   display: grid;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tag-list-item {
@@ -819,6 +857,7 @@ textarea:focus {
   border-radius: 16px;
   background: var(--surface);
   padding: 9px 10px;
+  min-width: 0;
 }
 
 .tag-dot,
@@ -839,7 +878,7 @@ textarea:focus {
 
 .tag-edit,
 .tag-delete {
-  min-height: 32px;
+  min-height: 40px;
   border: 0;
   border-radius: 999px;
   background: var(--surface-2);
@@ -861,6 +900,7 @@ textarea:focus {
   display: flex;
   gap: 8px;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   padding: 2px 2px 8px;
   scrollbar-width: none;
@@ -873,7 +913,7 @@ textarea:focus {
 .tag-picker-chip {
   display: inline-flex;
   flex: 0 0 auto;
-  min-height: 36px;
+  min-height: 40px;
   align-items: center;
   gap: 8px;
   border: 0;
@@ -902,12 +942,14 @@ textarea:focus {
   grid-template-columns: auto auto minmax(0, 1fr);
   gap: 8px 10px;
   align-items: center;
-  min-height: 58px;
-  padding: 11px;
+  min-height: 64px;
+  padding: 10px 11px;
 }
 
 .overview-main {
   display: grid;
+  align-content: center;
+  min-height: 44px;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -928,21 +970,34 @@ textarea:focus {
 
 .task-check {
   display: grid;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.task-check::before {
+  content: "";
   width: 24px;
   height: 24px;
-  place-items: center;
   border: 1.5px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
 }
 
-.task-check[aria-pressed="true"] {
+.task-check[aria-pressed="true"]::before {
   border-color: var(--primary-strong);
   background: var(--primary-soft);
 }
 
 .task-check[aria-pressed="true"]::after {
   content: "";
+  position: absolute;
+  left: 17px;
+  top: 18px;
   width: 9px;
   height: 5px;
   border-left: 2px solid var(--primary-strong);
@@ -970,6 +1025,7 @@ textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  min-width: 0;
 }
 
 .bottom-tabs {
@@ -1001,6 +1057,7 @@ textarea:focus {
     background 160ms ease,
     color 160ms ease,
     transform 160ms ease;
+  touch-action: manipulation;
 }
 
 .bottom-tab.active {
@@ -1076,6 +1133,7 @@ textarea:focus {
 
 .modal {
   width: min(620px, calc(100vw - 18px));
+  max-width: calc(100vw - 18px);
   max-height: min(760px, calc(100dvh - 18px));
   overflow: auto;
   border: 0;
@@ -1151,6 +1209,7 @@ textarea:focus {
 
 .event-options summary {
   min-height: 36px;
+  padding: 7px 0;
   color: var(--muted);
   cursor: pointer;
   font-size: 0.86rem;
@@ -1184,11 +1243,12 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
 }
 
 .checkbox-row input {
-  width: auto;
-  min-height: auto;
+  width: 22px;
+  min-height: 22px;
 }
 
 .toast {

@@ -41,12 +41,19 @@ import {
 
 bindElements();
 const els = elements();
+let eventSaveInFlight = false;
+let eventDeleteInFlight = false;
+let resumeInFlight = false;
+let lastResumeAt = 0;
+let searchRenderTimer = 0;
+let refreshRequestId = 0;
 
 boot();
 
 async function boot() {
   registerServiceWorker();
   bindUiEvents();
+  bindLifecycleEvents();
   document.documentElement.dataset.theme =
     localStorage.getItem('kalender-theme') || 'light';
   syncThemeButton();
@@ -120,7 +127,8 @@ function bindUiEvents() {
 
   els.eventSearch.addEventListener('input', () => {
     state.search = els.eventSearch.value;
-    renderAll();
+    window.clearTimeout(searchRenderTimer);
+    searchRenderTimer = window.setTimeout(renderAll, 90);
   });
 
   els.categoryFilters.addEventListener('change', (event) => {
@@ -263,14 +271,24 @@ async function loadTagsSafely() {
 }
 
 async function refreshEventsAndRender() {
+  const requestId = ++refreshRequestId;
   const [rangeStart, rangeEnd] = eventRangeForView();
-  state.events = await fetchEvents(
-    state.calendars.map((calendar) => calendar.id),
-    rangeStart,
-    rangeEnd,
-  );
-  renderAll();
-  scheduleReminders();
+  const calendarIds = state.calendars.map((calendar) => calendar.id);
+  if (!calendarIds.length) {
+    state.events = [];
+    renderAll();
+    return;
+  }
+
+  try {
+    const events = await fetchEvents(calendarIds, rangeStart, rangeEnd);
+    if (requestId !== refreshRequestId) return;
+    state.events = events;
+    renderAll();
+    scheduleReminders();
+  } catch (error) {
+    showToast(error.message || 'Events could not be loaded.');
+  }
 }
 
 async function setupRealtime() {
@@ -306,29 +324,59 @@ function movePeriod(direction) {
 
 async function handleEventSubmit(event) {
   event.preventDefault();
+  if (eventSaveInFlight) return;
   els.eventError.textContent = '';
+  eventSaveInFlight = true;
   try {
     const payload = readEventForm();
     if (!canEditCalendar(payload.calendar_id)) {
       throw new Error('You do not have permission to edit this calendar.');
     }
+    setFormBusy(els.eventForm, true);
     await saveEvent(payload);
     els.eventModal.close();
     await refreshEventsAndRender();
     showToast('Event saved');
   } catch (error) {
     els.eventError.textContent = error.message;
+  } finally {
+    eventSaveInFlight = false;
+    setFormBusy(els.eventForm, false);
   }
 }
 
 async function handleDeleteEvent() {
+  if (eventDeleteInFlight) return;
   const eventId = els.eventId.value;
   const event = state.events.find((item) => item.id === eventId);
-  if (!event || !canEditCalendar(event.calendar_id)) return;
-  await deleteEvent(eventId);
+  if (!event) {
+    showToast('This event is no longer available.');
+    return;
+  }
+  if (!canEditCalendar(event.calendar_id)) {
+    showToast('You do not have permission to delete this event.');
+    return;
+  }
+
+  eventDeleteInFlight = true;
+  els.deleteEventBtn.disabled = true;
+  const previousEvents = state.events;
+  refreshRequestId += 1;
+  state.events = state.events.filter((item) => item.id !== eventId);
   els.eventModal.close();
-  await refreshEventsAndRender();
-  showToast('Event deleted');
+  renderAll();
+
+  try {
+    await deleteEvent(eventId);
+    showToast('Event deleted');
+  } catch (error) {
+    state.events = previousEvents;
+    renderAll();
+    showToast(error.message || 'Event could not be deleted.');
+  } finally {
+    eventDeleteInFlight = false;
+    els.deleteEventBtn.disabled = false;
+  }
 }
 
 async function handleCreateCalendar(event) {
@@ -434,10 +482,18 @@ async function handleToggleComplete(eventId) {
     return;
   }
 
+  const nextCompleted = !event.completed;
+  const previousCompleted = event.completed;
+  refreshRequestId += 1;
+  event.completed = nextCompleted;
+  renderAll();
+
   try {
-    await setEventCompleted(eventId, !event.completed);
-    await refreshEventsAndRender();
+    await setEventCompleted(eventId, nextCompleted);
   } catch (error) {
+    const currentEvent = state.events.find((item) => item.id === eventId);
+    if (currentEvent) currentEvent.completed = previousCompleted;
+    renderAll();
     showToast(error.message);
   }
 }
@@ -512,6 +568,68 @@ function bindSwipeNavigation() {
     },
     { passive: true },
   );
+}
+
+function bindLifecycleEvents() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') recoverAfterResume();
+  });
+  window.addEventListener('focus', recoverAfterResume);
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) recoverAfterResume();
+  });
+}
+
+async function recoverAfterResume() {
+  if (resumeInFlight) return;
+  if (!state.session && !document.body.classList.contains('authenticated')) return;
+
+  const now = Date.now();
+  if (now - lastResumeAt < 1500) return;
+  lastResumeAt = now;
+  resumeInFlight = true;
+
+  const activePanel = document.querySelector('.app-panel.active')?.dataset.panel || 'calendar';
+  const activeCalendarId = state.activeCalendarId;
+
+  try {
+    const session = await getSession();
+    state.session = session;
+    setAuthenticatedView(Boolean(session));
+
+    if (!session) {
+      state.calendars = [];
+      state.events = [];
+      state.tags = [];
+      await removeChannel(state.realtimeChannel);
+      state.realtimeChannel = null;
+      return;
+    }
+
+    renderUser();
+    const [calendars, tags] = await Promise.all([loadCalendarsSafely(), loadTagsSafely()]);
+    state.calendars = calendars;
+    state.tags = tags;
+    syncSelectedTags();
+    state.activeCalendarId =
+      calendars.find((calendar) => calendar.id === activeCalendarId)?.id ||
+      calendars[0]?.id ||
+      null;
+    setActivePanel(activePanel);
+    await setupRealtime();
+    await refreshEventsAndRender();
+  } catch (error) {
+    showToast(error.message || 'Sync could not be restored.');
+  } finally {
+    resumeInFlight = false;
+  }
+}
+
+function setFormBusy(form, isBusy) {
+  form.setAttribute('aria-busy', String(isBusy));
+  form.querySelectorAll('button, input, select, textarea').forEach((control) => {
+    control.disabled = isBusy;
+  });
 }
 
 function scheduleReminders() {
