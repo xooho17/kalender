@@ -1,6 +1,6 @@
-export const SUPABASE_URL = 'https://wpcycaqvzxujyxablnkp.supabase.co';
+export const SUPABASE_URL = 'https://wfksxakigndwppnurkby.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY =
-  'sb_publishable_HEgo-Ne3c5mBSmgxRTQg6Q_VrT0TM3z';
+  'sb_publishable_2er8v8QuLHHMLcGYdFptTQ_V6pUjkUA';
 
 export const CATEGORY_COLORS = {
   work: '#3b82f6',
